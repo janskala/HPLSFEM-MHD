@@ -1,0 +1,10 @@
+CMakeFiles
+CMakeCache.txt
+*.o
+*~
+*.bck
+*.cmake
+Makefile
+HPLSFEM-MHD
+results/*
+results-1
