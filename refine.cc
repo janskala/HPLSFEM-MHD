@@ -159,7 +159,7 @@ namespace mhd
         grad=-9e99;
         for(unsigned int l=0; l<Nv; l++){
           if (locShockIndx[l]<1e-8) locShockIndx[l]=1e-8;
-          double hlp=std::log(locShockIndx[l]/cell->diameter()); // /std::pow(cell->diameter(),dim)
+          double hlp=std::log(locShockIndx[l]*cell->diameter()); // /std::pow(cell->diameter(),dim)
           
           //if (hlp<1.0) hlp=1.0; // for smooth region
           if (hlp>50.0) hlp=50.0; // remove extrema

@@ -135,25 +135,22 @@ namespace mhd
     d=(c+1)%3;
     e=(d+1)%3;
       
-    vl[1+c]*=-0.0;  // mirror velocity
-    vo[1+c]*=-0.0;
-    vl[4+d]*=-0.0;  // mirror B
-    vo[4+d]*=-0.0;
+    vl[1+c]=0.0;  // mirror velocity
+    vo[1+c]=0.0;
+    vl[4+d]=0.0;  // mirror B
+    vo[4+d]=0.0;
     
     dvx[c][0]=0.0; // density normal derivative is zero
     dox[c][0]=0.0;
-    feg[c][0]=0.0;
     dvx[c][7]=0.0; // energy normal derivative is zero
     dox[c][7]=0.0;
-    feg[c][7]=0.0;
     dvx[c][8+e]=0.0;  // mirror gradient of J
     dox[c][8+e]=0.0;
-    feg[c][8+e]=0.0;
     
     ETA=eta[qp];
     for(unsigned int j = 0; j < dim; j++)
-      if (std::fabs(n[j])>0.5) ETAg[j]=0.0;
-      else ETAg[j]=etag[qp][j];
+      ETAg[j]=etag[qp][j];
+    ETAg[c]=0.0;
   }
   
 } // end of namespace mhd

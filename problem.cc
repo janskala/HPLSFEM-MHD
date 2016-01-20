@@ -13,7 +13,7 @@ namespace mhd
                     (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
       dof_handler(triangulation), dof_handler_s(triangulation),
-      fe(FE_Q<dim>(FEO), Nv),fes(FEO),
+      fe(FE_Q<dim>(pars.getMinElementDegree()), Nv),fes(pars.getMinElementDegree()),
       pcout(std::cout,
           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
 #ifdef USE_TIMER
@@ -22,10 +22,10 @@ namespace mhd
                     TimerOutput::wall_times)
 #endif
   {
-    int initCond,resMod;
+    int initCond;
     pcout<<"Element degree: "<<fe.degree<<std::endl;
     
-    mhdeq = new MHDequations<dim>(dof_handler, pars, mpi_communicator);
+    mhdeq = new MHDequations<dim>(pars, mpi_communicator);
     
     pcout<<"Parsing parameters"<<std::endl;
     pars.prm.enter_subsection("Output");
@@ -60,7 +60,6 @@ namespace mhd
     pars.prm.enter_subsection("Simulation");
     {
       initCond=pars.prm.get_integer("Initial condition");
-      resMod=pars.prm.get_integer("Resistivity model");
       pars.prm.enter_subsection("Box");
       {
         boxP1[0]=pars.prm.get_double("x_min");
@@ -466,8 +465,8 @@ namespace mhd
 //                  " vmax="<<mhdeq->getVmax()<<" "<<overflow<<std::endl;
         }
         (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
-        if (time_step%1==0) pcout << "No. linearization it.: " << iter << 
-                                          " No. solver it.:"<< sitr << 
+        if (time_step%1==0) pcout << "No. l. it.: " << iter << 
+                                          " No. s. it.:"<< sitr << 
                                           " dt="<<mhdeq->getDt()<<
                                           " vmax="<<mhdeq->getVmax()<<std::endl;
 

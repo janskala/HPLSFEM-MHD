@@ -41,8 +41,8 @@ namespace mhd
   }  
   
   template <int dim>
-  MHDequations<dim>::MHDequations(DoFHandler<dim>& dofh, Params &pars, MPI_Comm comm) : 
-                     dof_handler(dofh), mpi_communicator(comm)
+  MHDequations<dim>::MHDequations(Params &pars, MPI_Comm comm) : 
+                                  mpi_communicator(comm)
   {
     dt=1e-6;
     vmax=0.0;
@@ -119,7 +119,7 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDequations<dim>::setFEvals(FEFaceValues<dim> &fv,
+  void MHDequations<dim>::setFEvals(const FEFaceValues<dim> &fv,
                                     const unsigned int dofs,
                                     const unsigned int qp)
   {
@@ -134,7 +134,7 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDequations<dim>::setFEvals(FEValues<dim> &fv,
+  void MHDequations<dim>::setFEvals(const FEValues<dim> &fv,
                                     const unsigned int dofs,
                                     const unsigned int qp)
   {
@@ -181,7 +181,6 @@ namespace mhd
     
     JacobiM(vl);
     if (NRLin) dxA(vl,dvx);
-
     
     for(unsigned int i=0;i<dofs/Nv;i++){
       double val = fev[i];
@@ -189,31 +188,36 @@ namespace mhd
           
       // operator part: sum_i dA_i/dx_i
       if (NRLin){  // when cell is small enough then add: sum_i dA_i/dx_i
-        for(unsigned int l=0;l<Nv;l++)    
-          for(unsigned int k=0;k<Ne;k++)
+        for(unsigned int k=0;k<Ne;k++)
+          for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)=B[k][l]*dtval; 
       }else{  // the cell is big, clear it only
-        for(unsigned int l=0;l<Nv;l++) 
-          for(unsigned int k=0;k<Ne;k++)
+        for(unsigned int k=0;k<Ne;k++)
+          for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)=0.0;
       }
       // diagonal part 1
-      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dtval; // time independent part normalized by dt - better conditioning of sparse m.
+      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dtval;
       for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=val;
         
       // add gravity terms
-      O[i](1,0)+=gravity[0]*dtval;
-      O[i](2,0)+=gravity[1]*dtval;
-      O[i](3,0)+=gravity[2]*dtval;
-      O[i](7,1)+=gravity[0]*dtval;
-      O[i](7,2)+=gravity[1]*dtval;
-      O[i](7,3)+=gravity[2]*dtval;
+      O[i](1,0)-=gravity[0]*dtval;
+      O[i](2,0)-=gravity[1]*dtval;
+      O[i](3,0)-=gravity[2]*dtval;
+      O[i](7,1)-=gravity[0]*dtval;
+      O[i](7,2)-=gravity[1]*dtval;
+      O[i](7,3)-=gravity[2]*dtval;
       // operator part: sum_i A_i \phi_i/dx_i
       for(unsigned int d=0;d<dim;d++){
-        double dtgrad = theta*dt*feg[d][i];
-        for(unsigned int k=0;k<Ne;k++)    // time independent part
-          for(unsigned int l=0;l<Nv;l++)   // is normalized by dt*theta
+        double dtgrad = feg[d][i];
+        //for(unsigned int k=Nt;k<Ne;k++)  // time independent part
+        //  for(unsigned int l=0;l<Nv;l++)
+        //    O[i](k,l)+=A[d][k][l]*dtgrad;
+        dtgrad*=theta*dt;
+        for(unsigned int k=0;k<Ne;k++)
+          for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)+=A[d][k][l]*dtgrad;
+        
       }
     }
   }
@@ -221,7 +225,7 @@ namespace mhd
   template <int dim>
   void MHDequations<dim>::set_rhs(Vector<double> &F)
   {
-    double sum[Nt],sum2[Nt],dtth;
+    double sum[Nt],sum2[Nt],dtth,dtoth;
     
     JacobiM(vo);
     
@@ -229,21 +233,30 @@ namespace mhd
       F(k)=vo[k];
       sum[k]=sum2[k]=0.0;
     }
+    for(unsigned int k=Nt;k<Ne;k++) F(k)=0.0;
       
     if (NRLin)
-      for(unsigned int k=0;k<Nt;k++)
-        for(unsigned int l=0;l<Nv;l++)
+      for(unsigned int k=0;k<Nt;k++)   // nothing is in timde independent part
+        for(unsigned int l=0;l<Nv;l++)  
           sum2[k]+=B[k][l]*vl[l];
     
-    for(unsigned int k=0;k<Nt;k++)
-      for(unsigned int l=0;l<Nv;l++)
-        for(unsigned int d=0;d<dim;d++)
+    for(unsigned int d=0;d<dim;d++)
+      for(unsigned int k=0;k<Nt;k++)
+        for(unsigned int l=0;l<Nv;l++)
           sum[k]+=A[d][k][l]*dox[d][l];
       
-    for(unsigned int k=0;k<Nt;k++)
-      F(k)-=dt*((1.-theta)*sum[k]-theta*sum2[k]);
-    // terms with eta derivative
     dtth=-dt*theta;
+    dtoth=dt*(1.0-theta);
+    for(unsigned int k=0;k<Nt;k++)
+      F(k)-=dtoth*sum[k]-dtth*sum2[k];
+    
+    // add gravity terms
+    F(1)+=gravity[0]*vo[0]*dtoth;
+    F(2)+=gravity[1]*vo[0]*dtoth;
+    F(3)+=gravity[2]*vo[0]*dtoth;
+    F(7)+=dtoth*(gravity[0]*vo[1]+gravity[1]*vo[2]+gravity[2]*vo[2]);
+    
+    // terms with eta derivative
     F[4]+=dtth*(vl[10]*ETAg[1]-vl[9]*ETAg[2]);
     F[5]+=dtth*(-vl[10]*ETAg[0]+vl[8]*ETAg[2]);
     F[6]+=dtth*(vl[9]*ETAg[0]-vl[8]*ETAg[1]);
@@ -255,7 +268,7 @@ namespace mhd
   template <int dim>
   bool MHDequations<dim>::checkOverflow(LA::MPI::Vector &v, LA::MPI::Vector &o)
   {
-    double Uk,Um,buf,pc=1e-6,rhs,rhc=1e-2;
+    double Uk,Um,buf,pc=1e-4/(GAMMA-1.0),rhs,rhc=1e-2;
     int overflow=0;
     std::pair<types::global_dof_index, types::global_dof_index> range=v.local_range();
     for(unsigned int i=range.first;i<range.second;i+=Nv){
@@ -291,7 +304,7 @@ namespace mhd
       buf=Um+Uk;
       if ((v[i+7]-buf)<pc){
         v[i+7]=buf+pc;
-        //overflow=1;
+        overflow=1;
       }
     }
     
@@ -378,25 +391,8 @@ namespace mhd
     E2 = (v[1] * v[6] - v[3] * v[4])*iRh + ETA*v[9];
     E3 = (v[2] * v[4] - v[1] * v[5])*iRh + ETA*v[10];
 
-    Flx[0][0] = v[1];
-    Flx[0][1] = v[1]*v[1]*iRh-v[4]*v[4]+0.5*(Um+p);
-    Flx[0][2] = v[1]*v[2]*iRh-v[4]*v[5];
-    Flx[0][3] = v[1]*v[3]*iRh-v[4]*v[6];
-    //Flx[0][4] = 0;
-    Flx[0][5] = -E3;
-    Flx[0][6] =  E2;
-    Flx[0][7] = (p*GAMMA/(GAMMA-1.0)+Uk)*v[1]*iRh + 2.0*(E2*v[6]-E3*v[5]);
-    if (dim>1){
-        Flx[1][0] = v[2];
-        Flx[1][1] = v[2]*v[1]*iRh-v[5]*v[4];
-        Flx[1][2] = v[2]*v[2]*iRh-v[5]*v[5]+0.5*(Um+p);
-        Flx[1][3] = v[2]*v[3]*iRh-v[5]*v[6];
-        //Flx[1][4] = 0;
-        Flx[1][5] =  E3;
-        Flx[1][6] = -E1;
-        Flx[1][7] = (p*GAMMA/(GAMMA-1.0)+Uk)*v[2]*iRh + 2.0*(E3*v[4]-E1*v[6]);
-    }
-    if (dim>2){
+    switch(dim){
+      case 3:
         Flx[2][0] = v[3];
         Flx[2][1] = v[3]*v[1]*iRh-v[6]*v[4];
         Flx[2][2] = v[3]*v[2]*iRh-v[6]*v[5];
@@ -405,6 +401,24 @@ namespace mhd
         Flx[2][5] =  E1;
         //Flx[2][6] = 0;
         Flx[2][7] = (p*GAMMA/(GAMMA-1.0)+Uk)*v[3]*iRh + 2.0*(E1*v[5]-E2*v[4]);
+      case 2:
+        Flx[1][0] = v[2];
+        Flx[1][1] = v[2]*v[1]*iRh-v[5]*v[4];
+        Flx[1][2] = v[2]*v[2]*iRh-v[5]*v[5]+0.5*(Um+p);
+        Flx[1][3] = v[2]*v[3]*iRh-v[5]*v[6];
+        //Flx[1][4] = 0;
+        Flx[1][5] =  E3;
+        Flx[1][6] = -E1;
+        Flx[1][7] = (p*GAMMA/(GAMMA-1.0)+Uk)*v[2]*iRh + 2.0*(E3*v[4]-E1*v[6]);
+      case 1:
+        Flx[0][0] = v[1];
+        Flx[0][1] = v[1]*v[1]*iRh-v[4]*v[4]+0.5*(Um+p);
+        Flx[0][2] = v[1]*v[2]*iRh-v[4]*v[5];
+        Flx[0][3] = v[1]*v[3]*iRh-v[4]*v[6];
+        //Flx[0][4] = 0;
+        Flx[0][5] = -E3;
+        Flx[0][6] =  E2;
+        Flx[0][7] = (p*GAMMA/(GAMMA-1.0)+Uk)*v[1]*iRh + 2.0*(E2*v[6]-E3*v[5]);
     }
   }
 

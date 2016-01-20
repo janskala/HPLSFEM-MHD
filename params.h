@@ -21,6 +21,8 @@ namespace mhd
     void setWeights(double*);
     void setBC(int*);
     int getDim();
+    int getMinElementDegree();
+    int getMaxElementDegree();
 
   private:
     void print_usage_message();
