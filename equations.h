@@ -48,7 +48,7 @@ namespace mhd
   class MHDequations
   {
   public:
-    MHDequations(DoFHandler<dim>&, Params&, MPI_Comm);
+    MHDequations(/*DoFHandler<dim>&,*/ Params&, MPI_Comm);
     ~MHDequations();
     
     void set_state_vector_for_qp(std::vector<Vector<double> >&,
@@ -58,10 +58,10 @@ namespace mhd
                         std::vector<double > &,  // eta values
                         std::vector<Tensor<1,dim> >&, // eta gradients
                         const unsigned int);
-    void setFEvals(FEValues<dim>&,
+    void setFEvals(const FEValues<dim>&,
                     const unsigned int,
                     const unsigned int);
-    void setFEvals(FEFaceValues<dim>&,
+    void setFEvals(const FEFaceValues<dim>&,
                     const unsigned int,
                     const unsigned int);
     void set_operator_matrixes(FullMatrix<double> *,
@@ -134,7 +134,7 @@ namespace mhd
                         const unsigned int); // qp
     
   private:
-    DoFHandler<dim>&    dof_handler;
+    //DoFHandler<dim>&    dof_handler;
     MPI_Comm            mpi_communicator;
     
     double               A[3][Ne][Nv];

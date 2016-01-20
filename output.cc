@@ -19,7 +19,7 @@ namespace mhd
                                 ".vtu");
     std::ofstream output(filename);
 
-    DataOut<dim> data_out;
+    DataOut<dim,hp::DoFHandler<dim> > data_out;
     data_out.attach_triangulation(triangulation);
 
     std::vector<std::string> solution_names;

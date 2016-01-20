@@ -12,7 +12,7 @@
 #include <deal.II/base/index_set.h>
 #include <deal.II/distributed/tria.h>
 #include <deal.II/distributed/grid_refinement.h>
-#include <deal.II/distributed/solution_transfer.h>
+//#include <deal.II/distributed/solution_transfer.h>
 
 #define USE_PETSC_LA
 namespace LA
@@ -51,10 +51,13 @@ namespace LA
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
+#include <deal.II/numerics/solution_transfer.h>
 
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_system.h>  // vector-valued finite elements
 #include <deal.II/fe/fe_q.h>       // Q1 elements
+#include <deal.II/hp/dof_handler.h>
+#include <deal.II/hp/fe_values.h>
 
 #include "equations.h"
 #include "initcon.h"
@@ -89,11 +92,22 @@ namespace mhd
     
     parallel::distributed::
       Triangulation<dim> triangulation;
-    DoFHandler<dim>      dof_handler;
-    DoFHandler<dim>      dof_handler_s;
+      
+    hp::DoFHandler<dim>      dof_handler;
+    hp::DoFHandler<dim>      dof_handler_s;
     
-    FESystem<dim>        fe;
-    FE_Q<dim>            fes;  // FE for single variable
+    hp::FECollection<dim>    fe_collection;
+    hp::FECollection<dim>    fe_collection_s;
+    
+    hp::QCollection<dim>     quadrature_collection;
+    hp::QCollection<dim-1>   face_quadrature_collection;
+    hp::QCollection<dim>     quadrature_col_proj;
+    
+    //DoFHandler<dim>      dof_handler;
+    //DoFHandler<dim>      dof_handler_s;
+    
+    FESystem<dim>**      fesys;
+    //FE_Q<dim>            fes;  // FE for single variable
 
     ConstraintMatrix     constraints;
     
@@ -115,6 +129,8 @@ namespace mhd
     //BlockVector<float>   shockWeights;
     Vector<float>         shockWeights;
     
+    FullMatrix<double>   *operator_matrixes;
+    
     ConditionalOStream   pcout;
 #ifdef USE_TIMER
     TimerOutput          computing_timer;
@@ -122,7 +138,7 @@ namespace mhd
     MHDequations<dim>*   mhdeq;
     InitialValues<dim>   initial_values;
     
-    const static int     FEO=1;
+    const static int     FEO=2;
     
     int                  BCmap[6]; 
     Point<dim> boxP1,boxP2;  // Box definition
@@ -134,6 +150,7 @@ namespace mhd
     int CGMmaxIt;
     unsigned int linmaxIt;
     int linLevel;
+    unsigned int afDegMin,afDegMax;   // max and min degrees of aprox. fce.
     
     unsigned int meshMinLev;
     unsigned int meshMaxLev;
@@ -141,6 +158,16 @@ namespace mhd
     double meshCoaGrad;
     unsigned int initSplit;
     unsigned int initRefin;
+    
+    typedef struct{
+      std::vector<Vector<double> >  old_sv,lin_sv,old_svf,lin_svf,rhs_values,init_values;
+      std::vector<std::vector<Tensor<1,dim> > >  old_sg,lin_sg,old_sgf,lin_sgf;
+      
+      std::vector<double>  eta_v,eta_vf;
+      std::vector<Tensor<1,dim> >  eta_g,eta_gf;
+    } QPVals;
+    
+    QPVals*     qpVals;
   };
   
   //template class MHDProblem<1>;  // parallel version of deal does not support 1D

@@ -11,11 +11,11 @@ namespace mhd
     TimerOutput::Scope t(computing_timer, "refine-simple");
 #endif
     Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
-    KellyErrorEstimator<dim>::estimate(dof_handler,
-                                        QGauss<dim-1>(fe.degree+1),
-                                        typename FunctionMap<dim>::type(),
-                                        distributed_solution,
-                                        estimated_error_per_cell);
+//     KellyErrorEstimator<dim>::estimate(dof_handler,
+//                                         quadrature_collection,
+//                                         typename FunctionMap<dim>::type(),
+//                                         distributed_solution,
+//                                         estimated_error_per_cell);
      parallel::distributed::GridRefinement::
      refine_and_coarsen_fixed_fraction(triangulation,
                                     estimated_error_per_cell,
@@ -43,6 +43,7 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "refine-shocks");
 #endif
+    // h-refinement
     typename Triangulation<dim>::active_cell_iterator
             cell = triangulation.begin_active(),
             endc = triangulation.end();
@@ -57,6 +58,17 @@ namespace mhd
                 (shockIndicator(cell_no) < meshCoaGrad))
           cell->set_coarsen_flag();
       }
+      // p-refinement
+//       typename hp::DoFHandler<dim>::active_cell_iterator
+//       cell = dof_handler.begin_active(),
+//       endc = dof_handler.end();
+//       for (; cell!=endc; ++cell)
+//         if (cell->refine_flag_set() &&
+//             (smoothness_indicators(cell->active_cell_index()) > threshold_smoothness) &&
+//             (cell->active_fe_index()+1 < fe_collection.size())) {
+//           cell->clear_refine_flag();
+//           cell->set_active_fe_index(cell->active_fe_index() + 1);
+//         }
       
     transfer_solution();
     
@@ -71,19 +83,21 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "solution transfer");
 #endif
-    parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector> 
-        solution_transfer(dof_handler);
+    //parallel::distributed::
+    SolutionTransfer<dim, LA::MPI::Vector, hp::DoFHandler<dim>> 
+        solution_transfer(dof_handler);  // TODO: wait then deal.ii team implement this feature
     
     triangulation.prepare_coarsening_and_refinement();
-    solution_transfer.prepare_for_coarsening_and_refinement(solution);
+    distributed_solution=solution;
+    solution_transfer.prepare_for_coarsening_and_refinement(distributed_solution);
     
     triangulation.execute_coarsening_and_refinement();  // Actual mesh refinement
     setup_system();  // resize vectors
     
-    LA::MPI::Vector distributed_solution(locally_owned_dofs, mpi_communicator);
-    solution_transfer.interpolate(distributed_solution);
+    LA::MPI::Vector distributed_solution_new(locally_owned_dofs, mpi_communicator);
+    solution_transfer.interpolate(distributed_solution_new,distributed_solution);
     
-    solution=distributed_solution;
+    solution=distributed_solution_new;
     //old_solution=solution;
   }
   
@@ -96,19 +110,13 @@ namespace mhd
 #endif
     float locShockIndx[Nv], locMean[Nv], max[Nv], min[Nv], grad;
     
-    QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
-    //QGauss<dim-1> face_quadrature_formula(FEO+1);
-    FEValues<dim> fe_values(fe, quadrature, update_values | update_gradients | update_quadrature_points);
+    hp::FEValues<dim> hp_fe_values(fe_collection, quadrature_col_proj,
+                             update_values   | update_gradients |
+                             update_quadrature_points );
     /*FEFaceValues<dim> fe_face_values(fe, face_quadrature_formula,
                                   update_values | update_gradients | update_quadrature_points |
                                   update_normal_vectors);*/
-    
-    const unsigned int n_q_points    = fe_values.n_quadrature_points;
     //const unsigned int n_f_q_points  = face_quadrature_formula.size();
-    
-    std::vector<Vector<double> > values(n_q_points, Vector<double>(Nv));
-    std::vector<std::vector<Tensor<1,dim> > >  gadients(n_q_points,
-                                        std::vector<Tensor<1,dim> > (Nv));
     /*std::vector<Vector<double> > fvalues(n_f_q_points, Vector<double>(Ne));
     std::vector<std::vector<Tensor<1,dim> > >  fgadients(n_f_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));*/
@@ -119,6 +127,9 @@ namespace mhd
     unsigned int cellNo=0;
     for(; cell!=endc; ++cell,++cellNo)
       if(cell->is_locally_owned()){
+        unsigned int d = cell->active_fe_index();  // degree
+        //const unsigned int dofs_per_cell = cell->get_fe().dofs_per_cell;
+        
         /*for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face){
           fe_face_values.reinit(cells, face);
               
@@ -129,27 +140,29 @@ namespace mhd
           }
         }*/
         // std::cout<<triangulation.locally_owned_subdomain()<<" start proj "<<cellNo<<std::endl;
-        fe_values.reinit(cell);
+        hp_fe_values.reinit(cell);
+        const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
         
-        fe_values.get_function_values(solution, values);
-        fe_values.get_function_gradients(solution, gadients);
+        fe_values.get_function_values(solution, qpVals[d].lin_sv);
+        //fe_values.get_function_gradients(solution, qpVals[d].lin_sg);
         
         for(unsigned int l=0; l<Nv; l++){
-          /*locShockIndx[l]= */locMean[l]=max[l]=-9e99;
+          locMean[l]=0.0;
+          max[l]=-9e99;
           min[l]=9e99;
         }
         
-        for(unsigned int point=0; point<n_q_points; ++point)
+        for(unsigned int point=0; point<fe_values.n_quadrature_points; ++point)
           for(unsigned int l=0; l<Nv; l++){
-            locMean[l]+=values[point][l];
-            if (values[point][l]>max[l]) max[l]=values[point][l];
-            if (values[point][l]<min[l]) min[l]=values[point][l];
+            locMean[l]+=qpVals[d].lin_sv[point][l];
+            if (qpVals[d].lin_sv[point][l]>max[l]) max[l]=qpVals[d].lin_sv[point][l];
+            if (qpVals[d].lin_sv[point][l]<min[l]) min[l]=qpVals[d].lin_sv[point][l];
           }
             
-        //for(unsigned int point=0; point<n_q_points; ++point){
+        //for(unsigned int point=0; point<fe_values.n_quadrature_points; ++point){
           // integrate gradients over cell for shock recognition
           for(unsigned int l=0; l<Nv; l++){
-              //grad=values[point][l]-locMean[l]/n_q_points;
+              //grad=qpVals[d].lin_sv[point][l]-locMean[l]/fe_values.n_quadrature_points;
               grad=max[l]-min[l];
               locShockIndx[l]=std::fabs(grad);
           }
@@ -159,14 +172,14 @@ namespace mhd
         grad=-9e99;
         for(unsigned int l=0; l<Nv; l++){
           if (locShockIndx[l]<1e-8) locShockIndx[l]=1e-8;
-          double hlp=std::log(locShockIndx[l]/cell->diameter()); // /std::pow(cell->diameter(),dim)
+          double hlp=std::log(locShockIndx[l]*cell->diameter()); // /std::pow(cell->diameter(),dim)
           
           //if (hlp<1.0) hlp=1.0; // for smooth region
           if (hlp>50.0) hlp=50.0; // remove extrema
           if (hlp>grad) grad=hlp; // maximum on cell
         }
         // shock indicator is given by average value of gradient on the cell
-        //if (grad>1)
+//         if (grad>-4.0)
 //         std::cout<<triangulation.locally_owned_subdomain()<<" cellNo: "<<cellNo
 //                  <<", g="<<grad<<" d="<<cell->diameter()<<std::endl;
         shockIndicator[cellNo]=grad;

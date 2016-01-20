@@ -51,6 +51,12 @@ namespace mhd
       prm.declare_entry("Initial refinement", "2",
                          Patterns::Integer(0,1000),
                          "The number of refinments applied on initial conditions.");
+      prm.declare_entry("aprox deg min", "1",
+                         Patterns::Integer(0,10),
+                         "Minimum degrees of aproimation element function.");
+      prm.declare_entry("aprox deg max", "2",
+                         Patterns::Integer(0,10),
+                         "Maximum degrees of aproimation element function.");
       
     }
     prm.leave_subsection();
@@ -124,9 +130,6 @@ namespace mhd
       prm.declare_entry("gamma", "1.6666666666666666666666666666666",
                          Patterns::Double(0,9e99),
                          "Specific heat.");
-      prm.declare_entry("Resistivity model", "0",
-                         Patterns::Integer(0,0),
-                         "0 - constant reistivity eta.");
       prm.declare_entry("eta method", "0",
                          Patterns::Integer(0,2),
                          "The method used for setting resistivity eta. 0 - constant, 1 - switch-on J, 2 - switch-on V_D");
