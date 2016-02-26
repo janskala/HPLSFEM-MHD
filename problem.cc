@@ -209,7 +209,7 @@ namespace mhd
     for(; cell!=endc; ++cell,++cells,++cellNo)
       if (cell->is_locally_owned()){
         //int celllevel = cell->level();//0*int(1.0/cell->diameter());
-        mhdeq->useNRLinearization(cell->level()>linLevel);
+        mhdeq->useNRLinearization(false);//cell->level()>linLevel);  // TODO: N-R lin. has BUG
 
         cell_matrix = 0;
         cell_rhs = 0;
@@ -401,7 +401,7 @@ namespace mhd
     for(unsigned int i=0;i<initRefin;i++){ // 5
       project_initial_conditions();
       mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
-      (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+      //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
       solution = distributed_solution;  // copy results to the solution (it includes ghosts)
       //refine_grid_simple();  // error estimator does not work
       setShockSmoothCoef(); // set refinement coeficients
@@ -418,6 +418,7 @@ namespace mhd
     project_initial_conditions();
     mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
     solution = distributed_solution;  // copy results to the solution (it includes ghosts)
+    (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
     mhdeq->checkDt(solution);         // find and set dt
     mhdeq->setNewDt();
     
@@ -431,12 +432,13 @@ namespace mhd
         lin_solution=old_solution;
         lastErr=9e99;
         linReset=iter=0;
+        //pcout<< "---so.it.: ";
         for(;;){ // linearization - do one time step
             assemble_system(iter);
             sitr = solve();
             overflow=mhdeq->checkOverflow(distributed_solution,old_solution);
             solution=distributed_solution;
-            mhdeq->checkDt(solution);
+            //mhdeq->checkDt(solution);
             system_rhs=lin_solution;
             system_rhs-=distributed_solution;
             err=system_rhs.linfty_norm();//norm_sqr();
@@ -460,11 +462,13 @@ namespace mhd
             iter++;
             if (iter>=linmaxIt) break;
             solution.swap(lin_solution);
+            //pcout<<sitr<<" ";
 //             pcout<< "---t: " << time<<" it: "<<iter<<" cgm:"<<sitr
 //                  << " res: "<<err<<
 //                  " vmax="<<mhdeq->getVmax()<<" "<<overflow<<std::endl;
         }
         (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+        mhdeq->checkDt(solution);
         if (time_step%1==0) pcout << "No. l. it.: " << iter << 
                                           " No. s. it.:"<< sitr << 
                                           " dt="<<mhdeq->getDt()<<
@@ -483,16 +487,32 @@ namespace mhd
         if (time_step%5==0){
           setShockSmoothCoef(); // set refinement coeficients
           refine_grid_rule();
-          distributed_solution=solution;
+          void_step();          // clean div B
+          /*distributed_solution=solution;
           mhdeq->checkOverflow(distributed_solution,solution);
-          (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
           old_solution=distributed_solution;
+          (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);*/
           pcout << "   refinement, ndofs: "<< dof_handler.n_dofs() << std::endl;
           continue;
         }
 
        old_solution=solution;
     }
+  }
+  
+  template <int dim>
+  void MHDProblem<dim>::void_step()  // perform one time step with dt=0
+  {                                  // Calculate current density and clean div B
+    old_solution=solution;
+    lin_solution=old_solution;
+    mhdeq->setDt(0.0);
+    assemble_system(0);
+    solve();
+    mhdeq->checkOverflow(distributed_solution,old_solution);
+    solution=distributed_solution;
+    (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+    mhdeq->checkDt(solution);
+    mhdeq->setNewDt();
   }
   
   template <int dim>

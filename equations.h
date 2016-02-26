@@ -151,7 +151,7 @@ namespace mhd
     double        GAMMA=5.0/3.0;
     double        gravity[3];
     int           ETAmet;               // which method is used to set resistivity
-    double        ETA,ETAg[3];
+    double        ETA,ETAg[3],ETAmax;
     double        ETApar1,ETApar2;
     double        CFL=0.2;
     

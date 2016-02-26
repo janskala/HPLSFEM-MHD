@@ -4,6 +4,9 @@ CMakeCache.txt
 *~
 *.bck
 *.cmake
+*.ogv
+*.png
+*.jpg
 Makefile
 HPLSFEM-MHD
 results/*

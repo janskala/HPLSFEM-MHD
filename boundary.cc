@@ -77,30 +77,24 @@ namespace mhd
                         const Tensor<1,dim> &n,                          // normal
                         const unsigned int qp)                           // qp
   {
+    unsigned int c=0;
     // set state vector values
-    vl[0] = lvq[qp](0);
-    vo[0] = ovq[qp](0);
-    for (unsigned int i = 1; i < 3; i++){
-      vl[i] = 0.0;
-      vo[i] = 0.0;
-    }
-    for (unsigned int i = 3; i < Nv; i++){
+    for (unsigned int i = 0; i < Nv; i++){
       vl[i] = lvq[qp](i);
       vo[i] = ovq[qp](i);
     }
     // ... and for gradients
-    for(unsigned int j = 0; j < dim; j++)
-      if (std::fabs(n[j])>0.5)
-        for(unsigned int i = 0; i < Nv; i++){
-          dvx[j][i]=0.0;
-          dox[j][i]=0.0;
-        }
-      else
-        for(unsigned int i = 0; i < Nv; i++){
-          dvx[j][i]=lgq[qp][i][j];
-          dox[j][i]=ogq[qp][i][j];
-        }
-        
+    for(unsigned int j = 0; j < dim; j++){
+      if (std::fabs(n[j])>0.5) c=j;
+      for(unsigned int i = 0; i < Nv; i++){
+        dvx[j][i]=lgq[qp][i][j];
+        dox[j][i]=ogq[qp][i][j];
+      }
+    }
+      
+    vl[1+c] = vo[1+c] = 0.0;
+    dvx[c][1+c]=dox[c][1+c]=0.0;
+       
     ETA=eta[qp];
     for(unsigned int j = 0; j < dim; j++)
       if (std::fabs(n[j])>0.5) ETAg[j]=0.0;
@@ -118,7 +112,7 @@ namespace mhd
                         const Tensor<1,dim> &n,                          // normal
                         const unsigned int qp)                           // qp
   {
-    unsigned int c,d,e;
+    unsigned int c=0,d,e;
     // set state vector values
     for (unsigned int i = 0; i < Nv; i++){
       vl[i] = lvq[qp](i);
