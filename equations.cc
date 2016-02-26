@@ -188,16 +188,19 @@ namespace mhd
           
       // operator part: sum_i dA_i/dx_i
       if (NRLin){  // when cell is small enough then add: sum_i dA_i/dx_i
-        for(unsigned int k=0;k<Ne;k++)
+        for(unsigned int k=0;k<Nt;k++)
           for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)=B[k][l]*dtval; 
       }else{  // the cell is big, clear it only
-        for(unsigned int k=0;k<Ne;k++)
+        for(unsigned int k=0;k<Nt;k++)
           for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)=0.0;
       }
+      for(unsigned int k=Nt;k<Ne;k++)
+        for(unsigned int l=0;l<Nv;l++)
+          O[i](k,l)=0.0;
       // diagonal part 1
-      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dtval;
+      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*val;
       for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=val;
         
       // add gravity terms
@@ -209,12 +212,12 @@ namespace mhd
       O[i](7,3)-=gravity[2]*dtval;
       // operator part: sum_i A_i \phi_i/dx_i
       for(unsigned int d=0;d<dim;d++){
-        double dtgrad = feg[d][i];
-        //for(unsigned int k=Nt;k<Ne;k++)  // time independent part
-        //  for(unsigned int l=0;l<Nv;l++)
-        //    O[i](k,l)+=A[d][k][l]*dtgrad;
-        dtgrad*=theta*dt;
-        for(unsigned int k=0;k<Ne;k++)
+        double dtgrad = dt*feg[d][i];
+        for(unsigned int k=Nt;k<Ne;k++)  // time independent part
+          for(unsigned int l=0;l<Nv;l++)
+            O[i](k,l)+=A[d][k][l]*dtgrad;
+        dtgrad*=theta;
+        for(unsigned int k=0;k<Nt;k++)   // time dependent part
           for(unsigned int l=0;l<Nv;l++)
             O[i](k,l)+=A[d][k][l]*dtgrad;
         
@@ -230,14 +233,14 @@ namespace mhd
     JacobiM(vo);
     
     for(unsigned int k=0;k<Nt;k++){
-      F(k)=vo[k];
+      F[k]=vo[k];
       sum[k]=sum2[k]=0.0;
     }
-    for(unsigned int k=Nt;k<Ne;k++) F(k)=0.0;
+    for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
       
     if (NRLin)
-      for(unsigned int k=0;k<Nt;k++)   // nothing is in timde independent part
-        for(unsigned int l=0;l<Nv;l++)  
+      for(unsigned int k=0;k<Nt;k++)
+        for(unsigned int l=0;l<Nv;l++)
           sum2[k]+=B[k][l]*vl[l];
     
     for(unsigned int d=0;d<dim;d++)
@@ -248,27 +251,28 @@ namespace mhd
     dtth=-dt*theta;
     dtoth=dt*(1.0-theta);
     for(unsigned int k=0;k<Nt;k++)
-      F(k)-=dtoth*sum[k]-dtth*sum2[k];
+      F[k]-=dtoth*sum[k]-dtth*sum2[k];
     
     // add gravity terms
-    F(1)+=gravity[0]*vo[0]*dtoth;
-    F(2)+=gravity[1]*vo[0]*dtoth;
-    F(3)+=gravity[2]*vo[0]*dtoth;
-    F(7)+=dtoth*(gravity[0]*vo[1]+gravity[1]*vo[2]+gravity[2]*vo[2]);
+    F[1]+=gravity[0]*vo[0]*dtoth;
+    F[2]+=gravity[1]*vo[0]*dtoth;
+    F[3]+=gravity[2]*vo[0]*dtoth;
+    F[7]+=dtoth*(gravity[0]*vo[1]+gravity[1]*vo[2]+gravity[2]*vo[3]);
     
     // terms with eta derivative
-    F[4]+=dtth*(vl[10]*ETAg[1]-vl[9]*ETAg[2]);
-    F[5]+=dtth*(-vl[10]*ETAg[0]+vl[8]*ETAg[2]);
-    F[6]+=dtth*(vl[9]*ETAg[0]-vl[8]*ETAg[1]);
-    F[7]+=2*dtth*(ETAg[0]*(vl[6]*vl[9]-vl[5]*vl[10])+
-                  ETAg[1]*(vl[4]*vl[10]-vl[6]*vl[8])+
-                  ETAg[2]*(vl[5]*vl[8]-vl[4]*vl[9]));
+    F[4]+=dtth*(vl[10]*ETAg[1]-vl[9]*ETAg[2])-dtoth*(vo[10]*ETAg[1]-vo[9]*ETAg[2]);
+    F[5]+=dtth*(-vl[10]*ETAg[0]+vl[8]*ETAg[2])-dtoth*(-vo[10]*ETAg[0]+vo[8]*ETAg[2]);
+    F[6]+=dtth*(vl[9]*ETAg[0]-vl[8]*ETAg[1])-dtoth*(vo[9]*ETAg[0]-vo[8]*ETAg[1]);
+    F[7]+=2*dtth*(ETAg[0]*(vl[6]*vl[9]-vl[5]*vl[10])+ETAg[1]*(vl[4]*vl[10]-vl[6]*vl[8])+
+                  ETAg[2]*(vl[5]*vl[8]-vl[4]*vl[9]))-2*dtoth*(
+                  ETAg[0]*(vo[6]*vo[9]-vo[5]*vo[10])+ETAg[1]*(vo[4]*vo[10]-vo[6]*vo[8])+
+                  ETAg[2]*(vo[5]*vo[8]-vo[4]*vo[9]));
   }
   
   template <int dim>
   bool MHDequations<dim>::checkOverflow(LA::MPI::Vector &v, LA::MPI::Vector &o)
   {
-    double Uk,Um,buf,pc=1e-4/(GAMMA-1.0),rhs,rhc=1e-2;
+    double Uk,Um,buf,pc=1e-4/(GAMMA-1.0),rhs,rhc=1e-1;
     int overflow=0;
     std::pair<types::global_dof_index, types::global_dof_index> range=v.local_range();
     for(unsigned int i=range.first;i<range.second;i+=Nv){
@@ -345,6 +349,8 @@ namespace mhd
       vlc=sqrt(buf); // fast magnetoacustic wave speed
       buf = CFL*hmin/vlc;
       if (buf<newdt) newdt = buf;  // use minimum dt
+      buf = CFL*hmin*hmin/(2.0*ETAmax);
+      if (buf<newdt) newdt = buf;  // use minimum dt for resistivity
       if (vlc>vmax) vmax=vlc;
     }
 

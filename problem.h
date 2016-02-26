@@ -84,6 +84,7 @@ namespace mhd
     void transfer_solution();
     void output_results(const unsigned int cycle);
     void project_initial_conditions();
+    void void_step();
 
     MPI_Comm             mpi_communicator;
     
