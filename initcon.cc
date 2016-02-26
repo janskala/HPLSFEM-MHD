@@ -42,13 +42,15 @@ namespace mhd
                                         Vector<double> &v) const
   {
     const double GAMMA=5.0/3.0;
+    double yy;
     double pressure;
     v(0)=1.0; // rho
-    v(1)=-.08*p[0]*p[0]*p[0]*exp(-p[0]*p[0]/12.0)*exp(-(p[1]-20)*(p[1]-20)/8.0); // v
+    v(1)=0.0;//-.08*p[0]*p[0]*p[0]*exp(-p[0]*p[0]/12.0)*exp(-(p[1]-20)*(p[1]-20)/8.0); // v
     v(2)=0.0;
     v(3)=0.0;
-    v(4)=0.0; // B
-    v(5)=std::tanh(p[0]);
+    yy=p[1]-20.0;
+    v(4)=4e-2*yy*exp(-(p[0]*p[0]+yy*yy)/8.0); // B
+    v(5)=std::tanh(p[0])-4e-2*p[0]*exp(-(p[0]*p[0]+yy*yy)/8.0);
     v(6)=0.0;
     pressure=0.05+1.0-v(5)*v(5);
     v(7)=pressure/(GAMMA-1.0)+v(5)*v(5)+v(1)*v(1); // U

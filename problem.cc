@@ -179,7 +179,7 @@ namespace mhd
     std::vector<Vector<double> >   lin_svf(n_f_q_points, Vector<double>(Nv));
     std::vector<std::vector<Tensor<1,dim> > >  lin_sgf(n_f_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
-    //std::vector<Vector<double> >  cell_residue(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  cell_residue(n_q_points, Vector<double>(Nv));
     
     std::vector<double>  eta_v(n_q_points);
     std::vector<Tensor<1,dim> >  eta_g(n_q_points);
@@ -208,9 +208,7 @@ namespace mhd
     unsigned int cellNo=0;
     for(; cell!=endc; ++cell,++cells,++cellNo)
       if (cell->is_locally_owned()){
-        //int celllevel = cell->level();//0*int(1.0/cell->diameter());
-        mhdeq->useNRLinearization(false);//cell->level()>linLevel);  // TODO: N-R lin. has BUG
-
+        
         cell_matrix = 0;
         cell_rhs = 0;
 
@@ -228,105 +226,130 @@ namespace mhd
         right_hand_side.vector_value_list(fe_values.get_quadrature_points(),
                                            rhs_values);
 
-        // Then assemble the entries of the local stiffness matrix and right
-        // hand side vector.
-        for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
+        // determine error on the cell for choosing way of constructing matrix
+        /*double maxErr=0.0;
+        for(unsigned int q_point=0; q_point<n_q_points; ++q_point)
+          for(unsigned int i=0; i<Nv; i++){
+            double er=std::fabs(cell_residue[q_point](i));
+            if (er>maxErr) maxErr=er;
+          }
+
+        if (maxErr<linPrec*1e-1){  // directly copy old linearization value into new linearization
+          for(unsigned int point=0; point<n_q_points; ++point){
           
-          mhdeq->set_state_vector_for_qp(lin_sv, lin_sg, old_sv, old_sg, eta_v, eta_g, q_point);
-          
-          mhdeq->setFEvals(fe_values,dofs_per_cell,q_point);
-          
-          mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
-          
-          mhdeq->set_rhs(cell_rhs_lin);
-          for(unsigned int i=0; i<dofs_per_cell/Nv; i++){
-            for(unsigned int j=0; j<dofs_per_cell/Nv; j++){
-              for(unsigned int k=0; k<Nv; k++){
-                for(unsigned int l=0; l<Nv; l++){
-                  for(unsigned int m=0; m<Ne; m++){
-                      cell_matrix(i*Nv+k,j*Nv+l) +=
-                          operator_matrixes[i](m,k)*
-                          operator_matrixes[j](m,l)*
-                          weights[m]*fe_values.JxW(q_point);
+            for(unsigned int i=0; i<dofs_per_cell; ++i){
+              const unsigned int cmp_i = fe.system_to_component_index(i).first;
+              cell_rhs(i) += lin_sv[point][cmp_i]*
+                                fe_values.shape_value(i,point)*
+                                fe_values.JxW(point);
+
+              cell_matrix(i,i) += fe_values.shape_value(i,point)*
+                                fe_values.shape_value(i,point)*
+                                fe_values.JxW(point);
+            }
+          }
+        }else{*/  // regular matrix construction
+          mhdeq->useNRLinearization(cell->level()>linLevel/* || maxErr>linPrec*1e3*/);
+
+          // Then assemble the entries of the local stiffness matrix and right
+          // hand side vector.
+          for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
+            
+            mhdeq->set_state_vector_for_qp(lin_sv, lin_sg, old_sv, old_sg, eta_v, eta_g, q_point);
+            
+            mhdeq->setFEvals(fe_values,dofs_per_cell,q_point);
+            
+            mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
+            
+            mhdeq->set_rhs(cell_rhs_lin);
+            for(unsigned int i=0; i<dofs_per_cell/Nv; i++){
+              for(unsigned int j=0; j<dofs_per_cell/Nv; j++){
+                for(unsigned int k=0; k<Nv; k++){
+                  for(unsigned int l=0; l<Nv; l++){
+                    for(unsigned int m=0; m<Ne; m++){
+                        cell_matrix(i*Nv+k,j*Nv+l) +=
+                            operator_matrixes[i](m,k)*
+                            operator_matrixes[j](m,l)*
+                            weights[m]*fe_values.JxW(q_point);
+                    }
                   }
                 }
               }
-            }
-            // Assembling the right hand side
-            for(unsigned int l=0; l<Ne; l++){
-              for(unsigned int k=0; k<Nv; k++){
-                //pcout<<k<<" "<<l<<' '<<cell_rhs(i*Ne+k)<<"\n";
-                cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
-                      (rhs_values[q_point](l)+cell_rhs_lin(l))*
-                      weights[l]*fe_values.JxW(q_point);
+              // Assembling the right hand side
+              for(unsigned int l=0; l<Ne; l++){
+                for(unsigned int k=0; k<Nv; k++){
+                  //pcout<<k<<" "<<l<<' '<<cell_rhs(i*Ne+k)<<"\n";
+                  cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
+                        (rhs_values[q_point](l)+cell_rhs_lin(l))*
+                        weights[l]*fe_values.JxW(q_point);
+                }
+                  //pcout<<"i:"<<i*Ne<<" "<<k<<' '<<cell_rhs(i*Ne+k)<<"\n";
               }
-                //pcout<<"i:"<<i*Ne<<" "<<k<<' '<<cell_rhs(i*Ne+k)<<"\n";
-            }
 
-          } // end of i-loop
-        }   // end of q-points
+            } // end of i-loop
+          }   // end of q-points
 
-        // Boundary conditions
-        for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
-          if (cell->face(face_number)->at_boundary()){
-              fe_face_values.reinit(cell, face_number);
-              fes_face_values.reinit(cells, face_number);
-              
-              fe_face_values.get_function_values(old_solution, old_svf);
-              fe_face_values.get_function_gradients(old_solution, old_sgf);
-              fe_face_values.get_function_values(lin_solution, lin_svf);
-              fe_face_values.get_function_gradients(lin_solution, lin_sgf);
-              //std::cout<<"here 0\n";
-              fes_face_values.get_function_values(eta, eta_vf);
-              fes_face_values.get_function_gradients(eta, eta_gf);
-              //std::cout<<"here 1\n";
-              right_hand_side.vector_value_list(fe_face_values.get_quadrature_points(),
-                                           rhs_values);
-              initial_values.vector_value_list(fe_face_values.get_quadrature_points(),
-                                          init_values);
-              
-              for(unsigned int q_point=0; q_point<n_f_q_points; ++q_point){
-                mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point); // call it before BC
+          // Boundary conditions
+          for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
+            if (cell->face(face_number)->at_boundary()){
+                fe_face_values.reinit(cell, face_number);
+                fes_face_values.reinit(cells, face_number);
                 
-                // get pointer to function which setup BC for given type defined in params
-                int bi = cell->face(face_number)->boundary_indicator();
+                fe_face_values.get_function_values(old_solution, old_svf);
+                fe_face_values.get_function_gradients(old_solution, old_sgf);
+                fe_face_values.get_function_values(lin_solution, lin_svf);
+                fe_face_values.get_function_gradients(lin_solution, lin_sgf);
+                //std::cout<<"here 0\n";
+                fes_face_values.get_function_values(eta, eta_vf);
+                fes_face_values.get_function_gradients(eta, eta_gf);
+                //std::cout<<"here 1\n";
+                right_hand_side.vector_value_list(fe_face_values.get_quadrature_points(),
+                                            rhs_values);
+                initial_values.vector_value_list(fe_face_values.get_quadrature_points(),
+                                            init_values);
                 
-                const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
-                // call BC function and setup state vectors
-                (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
-                            lin_svf, lin_sgf, old_svf, old_sgf, init_values,eta_vf,eta_gf,
-                            nrm, q_point);
-                
-                mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point);
-                
-                mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
-          
-                mhdeq->set_rhs(cell_rhs_lin);
-                for(unsigned int i=0; i<dofs_per_cell/Nv; i++){ // unfortunately we have to go all over the dofs_per_cell
-                  for(unsigned int j=0; j<dofs_per_cell/Nv; j++){ //   dofs_per_face do no cointains proper basis fce
-                    for(unsigned int k=0; k<Nv; k++){
-                      for(unsigned int l=0; l<Nv; l++){
-                        for(unsigned int m=0; m<Ne; m++){
-                            cell_matrix(i*Nv+k,j*Nv+l) +=
-                                operator_matrixes[i](m,k)*
-                                operator_matrixes[j](m,l)*
-                                weights[m]*fe_face_values.JxW(q_point);
+                for(unsigned int q_point=0; q_point<n_f_q_points; ++q_point){
+                  mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point); // call it before BC
+                  
+                  // get pointer to function which setup BC for given type defined in params
+                  int bi = cell->face(face_number)->boundary_indicator();
+                  
+                  const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
+                  // call BC function and setup state vectors
+                  (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
+                              lin_svf, lin_sgf, old_svf, old_sgf, init_values,eta_vf,eta_gf,
+                              nrm, q_point);
+                  
+                  mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point);
+                  
+                  mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
+            
+                  mhdeq->set_rhs(cell_rhs_lin);
+                  for(unsigned int i=0; i<dofs_per_cell/Nv; i++){ // unfortunately we have to go all over the dofs_per_cell
+                    for(unsigned int j=0; j<dofs_per_cell/Nv; j++){ //   dofs_per_face do no cointains proper basis fce
+                      for(unsigned int k=0; k<Nv; k++){
+                        for(unsigned int l=0; l<Nv; l++){
+                          for(unsigned int m=0; m<Ne; m++){
+                              cell_matrix(i*Nv+k,j*Nv+l) +=
+                                  operator_matrixes[i](m,k)*
+                                  operator_matrixes[j](m,l)*
+                                  weights[m]*fe_face_values.JxW(q_point); // /cell->diameter()
+                          }
                         }
                       }
                     }
-                  }
-                  // Assembling the right hand side
-                  for(unsigned int l=0; l<Ne; l++)
-                    for(unsigned int k=0; k<Nv; k++){
-                      cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
-                            (rhs_values[q_point](l)+cell_rhs_lin(l))*
-                            weights[l]*fe_face_values.JxW(q_point);
-                    }
-                        
-                }  // end of i
-              }  // end of q_point
-          } // end of boundary
-
+                    // Assembling the right hand side
+                    for(unsigned int l=0; l<Ne; l++)
+                      for(unsigned int k=0; k<Nv; k++){
+                        cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
+                              (rhs_values[q_point](l)+cell_rhs_lin(l))*
+                              weights[l]*fe_face_values.JxW(q_point); // /cell->diameter()
+                      }
+                          
+                  }  // end of i
+                }  // end of q_point
+            } // end of boundary
+        //}  // no linearization condition
 
         // The transfer from local degrees of freedom into the global matrix
         cell->get_dof_indices(local_dof_indices); // TODO: Matrix is symetric, optimalization is needed!
@@ -345,7 +368,6 @@ namespace mhd
     delete [] operator_matrixes;
   }
   
-  
   template <int dim>
   unsigned int MHDProblem<dim>::solve()
   {
@@ -356,10 +378,13 @@ namespace mhd
     
     LA::SolverCG solver(solver_control, mpi_communicator);
     
-    LA::MPI::PreconditionAMG preconditioner;
-    LA::MPI::PreconditionAMG::AdditionalData data;
+    //LA::MPI::PreconditionAMG preconditioner;
+    //LA::MPI::PreconditionAMG::AdditionalData data;
+    
+    LA::MPI::PreconditionJacobi preconditioner;
+    LA::MPI::PreconditionJacobi::AdditionalData data;
 #ifdef USE_PETSC_LA
-    data.symmetric_operator = true;
+    //data.symmetric_operator = true;
 #else
     / * Trilinos defaults are good * /
 #endif
@@ -430,24 +455,24 @@ namespace mhd
         if (time_step%10==0) pcout << "Time: " << time <<", time step: "<<time_step<< std::endl;
 
         lin_solution=old_solution;
+// 	residue=9e99;
         lastErr=9e99;
-        linReset=iter=0;
-        //pcout<< "---so.it.: ";
+        linReset=iter=sitr=0;
         for(;;){ // linearization - do one time step
             assemble_system(iter);
-            sitr = solve();
+            sitr += solve();
             overflow=mhdeq->checkOverflow(distributed_solution,old_solution);
             solution=distributed_solution;
             //mhdeq->checkDt(solution);
-            system_rhs=lin_solution;
-            system_rhs-=distributed_solution;
-            err=system_rhs.linfty_norm();//norm_sqr();
+            residue=lin_solution;
+            residue-=distributed_solution;
+            err=residue.linfty_norm();//norm_sqr();
             if (err<linPrec) break;  //linfty_norm
             if ((err>8.*lastErr && iter>1) || false){                 // linearization do not converge
               //if (err<1e-7*dof_handler.n_dofs()) break; // still ok error...
               mhdeq->setDt(mhdeq->getDt()*0.5);
               lin_solution=old_solution;
-              iter=0;
+              iter=sitr=0;
               lastErr=9e99;
               linReset++;
               pcout<< linReset<<" linearization reset. dt= "<<mhdeq->getDt()<<std::endl;
@@ -469,8 +494,8 @@ namespace mhd
         }
         (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
         mhdeq->checkDt(solution);
-        if (time_step%1==0) pcout << "No. l. it.: " << iter << 
-                                          " No. s. it.:"<< sitr << 
+        if (time_step%1==0) pcout << "l. it.: " << iter << 
+                                          " s. it.:"<< sitr << 
                                           " dt="<<mhdeq->getDt()<<
                                           " vmax="<<mhdeq->getVmax()<<std::endl;
 
@@ -552,14 +577,10 @@ namespace mhd
               cell_rhs(i) += rhs_values[point][cmp_i]*
                                 fe_values.shape_value(i,point)*
                                 fe_values.JxW(point);
-
-              for(unsigned int j=0; j<dofs_per_cell; ++j){
-                const unsigned int cmp_j = fe.system_to_component_index(j).first;
-                if (cmp_i==cmp_j)
-                  cell_matrix(i,j) += fe_values.shape_value(i,point)*
-                                    fe_values.shape_value(j,point)*
-                                    fe_values.JxW(point);
-              }
+                                
+              cell_matrix(i,i) += fe_values.shape_value(i,point)*
+                                fe_values.shape_value(i,point)*
+                                fe_values.JxW(point);
 
             }
           }

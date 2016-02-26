@@ -53,10 +53,10 @@ namespace mhd
                          "The number of refinments applied on initial conditions.");
       prm.declare_entry("aprox deg min", "1",
                          Patterns::Integer(0,10),
-                         "Minimum degrees of aproimation element function.");
+                         "Minimum degrees of approximation element function.");
       prm.declare_entry("aprox deg max", "2",
                          Patterns::Integer(0,10),
-                         "Maximum degrees of aproimation element function.");
+                         "Maximum degrees of approximation element function.");
       
     }
     prm.leave_subsection();
@@ -83,8 +83,8 @@ namespace mhd
                          "Linearization is exited when this number is reached.");
       prm.declare_entry("Simple level", "4",
                          Patterns::Integer(0,100),
-                         "Up to this refinement level the simple linearization is used. "
-                         "After the Newton-Rapson linearization is used.");
+                         "From this refinement level Newton-Rapson linearization is used."
+                         "Otherwise, a simple linearization method is used.");
       prm.enter_subsection("LS weights");
       {
         prm.declare_entry("Rho", "1.0", Patterns::Double(0,9e99), "Density.");

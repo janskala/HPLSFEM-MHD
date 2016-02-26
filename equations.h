@@ -158,7 +158,7 @@ namespace mhd
     double        vmax;
     double        hmin;
     
-    bool          NRLin;
+    bool          NRLin;               // Newton-Raphson linearization will be used
   };
   
   template class MHDequations<1>;  // create code for 1D to be able link it....
