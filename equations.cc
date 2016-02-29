@@ -146,6 +146,12 @@ namespace mhd
       for(unsigned int d=0;d<dim;d++)
         feg[d][i] = fv[u].gradient(j,qp)[d];
     }
+//     for(unsigned int i=0;i<dofs/Nv;i++){
+//       for(unsigned int j=0;j<dofs/Nv;j++)
+//         std::cout<<fv[u].value(i*Nv+j,qp)<<" ";
+//       std::cout<<"\n";
+//     }
+//     char a;std::cin>>a;
   }
   
   template <int dim>

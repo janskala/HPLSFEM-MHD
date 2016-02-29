@@ -13,7 +13,7 @@ namespace mhd
                     (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
       dof_handler(triangulation), dof_handler_s(triangulation),
-      fe(FE_Q<dim>(pars.getMinElementDegree()), Nv),fes(pars.getMinElementDegree()),
+      FEO(pars.getMinElementDegree()),fe(FE_Q<dim>(FEO), Nv),fes(FEO),
       pcout(std::cout,
           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
 #ifdef USE_TIMER
@@ -21,7 +21,7 @@ namespace mhd
                     TimerOutput::summary,
                     TimerOutput::wall_times)
 #endif
-  {
+  {  // fe(FE_Q<dim>(FEO), 1, FE_ABF<dim>(FEO), 1, FE_Q<dim>(FEO), 1, FE_Nedelec<dim>(FEO), 1, FE_Q<dim>(FEO), 5)
     int initCond;
     pcout<<"Element degree: "<<fe.degree<<std::endl;
     
@@ -136,7 +136,7 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDProblem<dim>::assemble_system(const int iter)
+  void MHDProblem<dim>::assemble_system(const int /*iter*/)
   {
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "assembly");
@@ -249,7 +249,7 @@ namespace mhd
             }
           }
         }else{*/  // regular matrix construction
-          mhdeq->useNRLinearization(cell->level()>linLevel && iter>0 /* || maxErr>linPrec*1e3*/);
+          mhdeq->useNRLinearization(cell->level()>linLevel/* || maxErr>linPrec*1e3*/);
 
           // Then assemble the entries of the local stiffness matrix and right
           // hand side vector.
@@ -464,9 +464,9 @@ namespace mhd
             overflow=mhdeq->checkOverflow(distributed_solution,old_solution);
             solution=distributed_solution;
             //mhdeq->checkDt(solution);
-            residue=lin_solution;
-            residue-=distributed_solution;
-            err=residue.linfty_norm();//norm_sqr();
+            system_rhs=lin_solution;
+            system_rhs-=distributed_solution;
+            err=system_rhs.linfty_norm();//norm_sqr();
             if (err<linPrec) break;  //linfty_norm
             if ((err>8.*lastErr && iter>1) || false){                 // linearization do not converge
               //if (err<1e-7*dof_handler.n_dofs()) break; // still ok error...

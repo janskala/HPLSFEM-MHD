@@ -54,7 +54,9 @@ namespace LA
 
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_system.h>  // vector-valued finite elements
-#include <deal.II/fe/fe_q.h>       // Q1 elements
+#include <deal.II/fe/fe_q.h>       // Q1 elements - H1
+// #include <deal.II/fe/fe_nedelec.h> // Nedelec elements - Hcurl
+// #include <deal.II/fe/fe_abf.h>     // Arnold-Boffi-Falk (ABF) elements - Hdiv
 
 #include "equations.h"
 #include "initcon.h"
@@ -93,6 +95,7 @@ namespace mhd
     DoFHandler<dim>      dof_handler;
     DoFHandler<dim>      dof_handler_s;
     
+    int                  FEO;
     FESystem<dim>        fe;
     FE_Q<dim>            fes;  // FE for single variable
 
@@ -122,8 +125,6 @@ namespace mhd
 #endif   
     MHDequations<dim>*   mhdeq;
     InitialValues<dim>   initial_values;
-    
-    const static int     FEO=1;
     
     int                  BCmap[6]; 
     Point<dim> boxP1,boxP2;  // Box definition
