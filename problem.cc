@@ -136,7 +136,7 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDProblem<dim>::assemble_system(const int /*iter*/)
+  void MHDProblem<dim>::assemble_system(const int iter)
   {
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "assembly");
@@ -249,7 +249,7 @@ namespace mhd
             }
           }
         }else{*/  // regular matrix construction
-          mhdeq->useNRLinearization(cell->level()>linLevel/* || maxErr>linPrec*1e3*/);
+          mhdeq->useNRLinearization(cell->level()>linLevel && iter>0 /* || maxErr>linPrec*1e3*/);
 
           // Then assemble the entries of the local stiffness matrix and right
           // hand side vector.

@@ -140,7 +140,7 @@ namespace mhd
         }
         
         for(unsigned int point=0; point<n_q_points; ++point)
-          for(unsigned int l=0; l<Nv; l++){
+          for(unsigned int l=1; l<Nv; l++){
             locMean[l]+=values[point][l];
             if (values[point][l]>max[l]) max[l]=values[point][l];
             if (values[point][l]<min[l]) min[l]=values[point][l];
@@ -148,7 +148,7 @@ namespace mhd
             
         //for(unsigned int point=0; point<n_q_points; ++point){
           // integrate gradients over cell for shock recognition
-          for(unsigned int l=0; l<Nv; l++){
+          for(unsigned int l=1; l<Nv; l++){
               //grad=values[point][l]-locMean[l]/n_q_points;
               grad=max[l]-min[l];
               locShockIndx[l]=std::fabs(grad);
@@ -157,7 +157,7 @@ namespace mhd
 
         // find the greatest gradient
         grad=-9e99;
-        for(unsigned int l=0; l<Nv; l++){
+        for(unsigned int l=1; l<Nv; l++){
           if (locShockIndx[l]<1e-8) locShockIndx[l]=1e-8;
           double hlp=std::log(locShockIndx[l]*cell->diameter()); // /std::pow(cell->diameter(),dim)
           
