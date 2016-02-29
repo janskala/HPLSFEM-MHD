@@ -109,7 +109,7 @@ namespace mhd
     //A[2][6][9] = 0;
     //A[2][6][10] = 0;
 
-    A[2][7][0] = 2 * iRh*(v[4]*Ec2 - v[5]*Ec1) + v[3] * GAMMAmo*Uk*iRh2 - v[3]*(Uk + p)*iRh2;
+    A[2][7][0] = 2 * iRh*(v[4]*Ec2 - v[5]*Ec1) + (GAMMAmo*Uk - (Uk + p))*v[3]*iRh2;
     A[2][7][1] = -2*v[4]*v[6]*iRh - 2*GAMMAmo*v[1]*v[3]*iRh2;
     A[2][7][2] = -2*v[5]*v[6]*iRh - 2*GAMMAmo*v[2]*v[3]*iRh2;
     A[2][7][3] = 2 * (v[4] * v[4] + v[5] * v[5])*iRh + 2*v[3] * GAMMAmo*v[3]*iRh2 + (Uk + p)*iRh;
@@ -254,7 +254,7 @@ namespace mhd
     //A[1][6][9] = 0;
     //A[1][6][10] = 0;
 
-    A[1][7][0] = 2 * iRh*(-v[4]*Ec3 + v[6]*Ec1) + v[2] * GAMMAmo*Uk*iRh2 - v[2]*(Uk + p)*iRh2;
+    A[1][7][0] = 2 * iRh*(-v[4]*Ec3 + v[6]*Ec1) + (GAMMAmo*Uk - (Uk + p))*v[2]*iRh2;
     A[1][7][1] = -2 * v[4] * v[5] * iRh - 2 * GAMMAmo*v[1] * v[2] * iRh2;
     A[1][7][2] = 2 * (v[4] * v[4] + v[6] * v[6])*iRh - 2*v[2] * GAMMAmo*v[2]*iRh2 + (Uk + p)*iRh;
     A[1][7][3] = -2 * v[5] * v[6] * iRh - 2 * GAMMAmo*v[2] * v[3] * iRh2;
@@ -399,7 +399,7 @@ namespace mhd
     A[0][6][9] = ETA;
     //A[0][6][10] = 0;
 
-    A[0][7][0] = 2 * iRh*(v[5]*Ec3 - v[6]*Ec2) + v[1] * GAMMAmo*Uk*iRh2 - v[1]*(Uk + p)*iRh2;
+    A[0][7][0] = 2 * iRh*(v[5]*Ec3 - v[6]*Ec2) +  (GAMMAmo*Uk* - (Uk + p)) *v[1]*iRh2;
     A[0][7][1] = 2 * (v[5] * v[5] + v[6] * v[6])*iRh - 2*v[1] * GAMMAmo*v[1]*iRh2 + (Uk + p)*iRh;
     A[0][7][2] = -2 * v[4] * v[5] * iRh - v[1] * 2 * GAMMAmo*v[2]*iRh2;
     A[0][7][3] = -2 * v[4] * v[6] * iRh - v[1] * 2 * GAMMAmo*v[3]*iRh2;
