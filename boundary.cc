@@ -58,7 +58,7 @@ namespace mhd
     vo[3]*=cf;
     // ... and for gradients
     for(unsigned int j = 0; j < dim; j++)
-      if (std::fabs(n[j])>0.5){
+      /*if (std::fabs(n[j])>0.5){
         for(unsigned int i = 0; i < Nv; i++)
           dvx[j][i]=dox[j][i]=0.0;
         /*int k=(j+1)%dim; // normal component of B is set as div B = 0
@@ -66,7 +66,7 @@ namespace mhd
         std::cout<<k<<" "<<l<<" here3\n";
         dox[j][5+j]=-ogq[qp][5+k][k]-ogq[qp][5+l][l];
         dvx[j][5+j]=-lgq[qp][5+k][k]-lgq[qp][5+l][l];*/
-      }else
+      //}else
         for(unsigned int i = 0; i < Nv; i++){
           dvx[j][i]=lgq[qp][i][j];
           dox[j][i]=ogq[qp][i][j];
