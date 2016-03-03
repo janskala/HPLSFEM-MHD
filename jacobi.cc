@@ -462,16 +462,14 @@ namespace mhd
   }
   
   // Derivative (x,y,z) of the Jacobi matrix - Newton-Raphson linearization
-  template <int dim>
-  void MHDequations<dim>::dxA(double v[], double dv[][Nv])
+  template <>
+  void MHDequations<1>::dxA(double v[], double dv[][Nv])
   {
-    double iRh, iRh2,iRh3;
+    double iRh, iRh2;
 
     iRh = 1.0 / v[0];
     iRh2 = iRh*iRh;
-    iRh3 = iRh2*iRh;
-    switch(dim){
-    case 1:
+    
 //     B[0][0]=0;
 //     B[0][1]=0;
 //     B[0][2]=0;
@@ -603,9 +601,16 @@ namespace mhd
 //     B[10][8]=0;
 //     B[10][9]=0;
 //     B[10][10]=0;
-    break;
-    
-    case 2:
+  }
+  
+  template <>
+  void MHDequations<2>::dxA(double v[], double dv[][Nv])
+  {
+    double iRh, iRh2;
+
+    iRh = 1.0 / v[0];
+    iRh2 = iRh*iRh;
+
 //     B[0][0]=0;
 //     B[0][1]=0;
 //     B[0][2]=0;
@@ -737,9 +742,17 @@ namespace mhd
 //     B[10][8]=0;
 //     B[10][9]=0;
 //     B[10][10]=0;
-    break;
+  }
+  
+  template <>
+  void MHDequations<3>::dxA(double v[], double dv[][Nv])
+  {
+    double iRh, iRh2, iRh3;
+
+    iRh = 1.0 / v[0];
+    iRh2 = iRh*iRh;
+    iRh3 = iRh2*iRh;
     
-    case 3:
 //     B[0][0]=0;
 //     B[0][1]=0;
 //     B[0][2]=0;
@@ -871,7 +884,12 @@ namespace mhd
 //     B[10][8]=0;
 //     B[10][9]=0;
 //     B[10][10]=0;
-    } // end of switch
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::dxA(double v[], double dv[][Nv])
+  {
+    Assert(dim > 3, ExcDimensionMismatch (dim, 3));
   }
   
 } // end of namespace mhd

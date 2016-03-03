@@ -22,6 +22,7 @@ namespace mhd
 
     void mhdBlast(const Point<dim>&, Vector<double>&) const;
     void harris(const Point<dim>&, Vector<double>&) const;
+    void debug(const Point<dim>&, Vector<double>&) const;
     
     virtual void vector_value(const Point<dim> &, Vector<double>&) const;
                                         

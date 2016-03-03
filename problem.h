@@ -55,8 +55,9 @@ namespace LA
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_system.h>  // vector-valued finite elements
 #include <deal.II/fe/fe_q.h>       // Q1 elements - H1
-// #include <deal.II/fe/fe_nedelec.h> // Nedelec elements - Hcurl
-// #include <deal.II/fe/fe_abf.h>     // Arnold-Boffi-Falk (ABF) elements - Hdiv
+// #include <deal.II/fe/fe_nedelec.h> // Nedelec elements - Hcurl -- up to 7th order
+//#include <deal.II/fe/fe_abf.h>     // Arnold-Boffi-Falk (ABF) elements - Hdiv -- only supports 2nd order!
+// #include <deal.II/fe/fe_raviart_thomas.h>  // Raviart-Thomas elements
 
 #include "equations.h"
 #include "initcon.h"
@@ -75,6 +76,7 @@ namespace mhd
     void run();
 
   private:
+    void setup_parameters(Params&);
     void setup_system();
     void assemble_system(const int);
     

@@ -5,7 +5,7 @@
 
 namespace mhd
 {
-  template <int dim>
+  template <int dim>  // One dimension - all MHD variables are aproximated by Lagrange elements
   MHDProblem<dim>::MHDProblem(Params &pars) :
       mpi_communicator(MPI_COMM_WORLD),
       triangulation(mpi_communicator,
@@ -21,7 +21,65 @@ namespace mhd
                     TimerOutput::summary,
                     TimerOutput::wall_times)
 #endif
-  {  // fe(FE_Q<dim>(FEO), 1, FE_ABF<dim>(FEO), 1, FE_Q<dim>(FEO), 1, FE_Nedelec<dim>(FEO), 1, FE_Q<dim>(FEO), 5)
+  {
+    setup_parameters(pars);
+  }
+  
+//   template <> // velocity is Arnold-Boffi-Falk (2D vectors) elements, B is Nedelec (2D vectors) elm. and the rest is Lagrange
+//   MHDProblem<2>::MHDProblem(Params &pars) :
+//       mpi_communicator(MPI_COMM_WORLD),
+//       triangulation(mpi_communicator,
+//                     typename Triangulation<2>::MeshSmoothing
+//                     (Triangulation<2>::smoothing_on_refinement |
+//                     Triangulation<2>::smoothing_on_coarsening)),
+//       dof_handler(triangulation), dof_handler_s(triangulation),
+//       FEO(pars.getMinElementDegree()),
+//       fe(FE_Q<2>(FEO), 1, FE_RaviartThomas<2>(FEO), 1, FE_Q<2>(FEO), 1, FE_Nedelec<2>(FEO), 1, FE_Q<2>(FEO), 5),
+//       fes(FEO),
+//       pcout(std::cout,
+//           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
+// #ifdef USE_TIMER
+//       ,computing_timer(mpi_communicator, pcout,
+//                     TimerOutput::summary,
+//                     TimerOutput::wall_times)
+// #endif
+//   {
+//     setup_parameters(pars);
+//   }
+  
+//   template <>  // velocity is Arnold-Boffi-Falk (3D vectors) elements, B is Nedelec (3D vectors) elm. and the rest is Lagrange
+//   MHDProblem<3>::MHDProblem(Params &pars) :
+//       mpi_communicator(MPI_COMM_WORLD),
+//       triangulation(mpi_communicator,
+//                     typename Triangulation<3>::MeshSmoothing
+//                     (Triangulation<3>::smoothing_on_refinement |
+//                     Triangulation<3>::smoothing_on_coarsening)),
+//       dof_handler(triangulation), dof_handler_s(triangulation),
+//       FEO(pars.getMinElementDegree()),
+//       fe(FE_Q<3>(FEO), 1, FE_RaviartThomas<3>(FEO), 1, FE_Nedelec<3>(FEO), 1, FE_Q<3>(FEO), 4),
+//       fes(FEO),
+//       pcout(std::cout,
+//           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
+// #ifdef USE_TIMER
+//       ,computing_timer(mpi_communicator, pcout,
+//                     TimerOutput::summary,
+//                     TimerOutput::wall_times)
+// #endif
+//   {
+//     setup_parameters(pars);
+//   }
+  
+  template <int dim>
+  MHDProblem<dim>::~MHDProblem()
+  {
+    dof_handler.clear();
+    dof_handler_s.clear();
+    delete mhdeq;
+  }
+  
+  template <int dim>
+  void MHDProblem<dim>::setup_parameters(Params &pars)
+  {
     int initCond;
     pcout<<"Element degree: "<<fe.degree<<std::endl;
     
@@ -76,14 +134,6 @@ namespace mhd
     pars.setBC(&BCmap[0]);  // sets kind of BC for six box sides
     
     initial_values.setInitialCondition(initCond);
-  }
-  
-  template <int dim>
-  MHDProblem<dim>::~MHDProblem()
-  {
-    dof_handler.clear();
-    dof_handler_s.clear();
-    delete mhdeq;
   }
   
   template <int dim>
@@ -562,9 +612,7 @@ namespace mhd
     unsigned int cellNo=0;
     for(; cell!=endc; ++cell,++cellNo)
       if(cell->is_locally_owned()){
-       // std::cout<<triangulation.locally_owned_subdomain()<<" start proj "<<cellNo<<std::endl;
           fe_values.reinit(cell);
-          //fe_values.get_function_gradients(solution, sln_g);
           initial_values.vector_value_list(fe_values.get_quadrature_points(),
                                           rhs_values);
           cell_rhs = 0;

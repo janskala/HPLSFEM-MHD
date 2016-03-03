@@ -115,9 +115,9 @@ namespace mhd
                          Patterns::Integer(2,3),
                          "Number of dimensions");
       prm.declare_entry("Initial condition", "0",
-                         Patterns::Integer(0,1),
+                         Patterns::Integer(0,2),
                          "Initial condition"
-                         "0 - MHD blast.");
+                         "0 - MHD blast, 1 - Harris CS, 2 - debug");
       prm.declare_entry("Total time", "1.0",
                          Patterns::Double(0,9e99),
                          "The time when the simulation will be terminated.");

@@ -19,8 +19,8 @@ namespace mhd
     v(1)=0.0; // v
     v(2)=0.0;
     v(3)=0.0;
-    v(4)=0.0/sqrt(2); // B
-    v(5)=0.0/sqrt(2);
+    v(4)=1.0/sqrt(2); // B
+    v(5)=1.0/sqrt(2);
     v(6)=0.0;
     
     v(8)=0.0;  // J
@@ -52,6 +52,25 @@ namespace mhd
   }
   
   template <int dim>
+  void InitialValues<dim>::debug(const Point<dim> &/*p*/,
+                                        Vector<double> &v) const
+  {
+    const double GAMMA=5.0/3.0;
+    v(0)=1.0;
+    v(1)=2.0;
+    v(2)=3.0;
+    v(3)=4.0;
+    v(4)=5.0;
+    v(5)=6.0;
+    v(6)=7.0;
+    v(7)=8.0/(GAMMA-1.0)+v(1)*v(1)+v(2)*v(2)+v(3)*v(3)
+                        +v(4)*v(4)+v(5)*v(5)+v(6)*v(6);
+    v(8)=9.0;
+    v(9)=10.0;
+    v(10)=11.0;
+  }
+  
+  template <int dim>
   void InitialValues<dim>::vector_value_list(const std::vector<Point<dim> > &points,
                                               std::vector<Vector<double> >   &value_list) const
   {
@@ -75,6 +94,9 @@ namespace mhd
         break;
       case 1:
         vectorValue=&InitialValues<dim>::harris;
+        break;
+      case 2:
+        vectorValue=&InitialValues<dim>::debug;
         break;
     }
   }

@@ -8,6 +8,15 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::output_results(const unsigned int fileNum)
   {
+    const char names[3][Nv][4]={ {"Rho","u","u_y","u_z","B","B_y","B_z","p","J","J_y","J_z"},
+                           {"Rho","u","u","u_z","B","B","B_z","p","J","J","J_z"},
+                           {"Rho","u","u","u","B","B","B","p","J","J","J"}};
+    DataComponentInterpretation::DataComponentInterpretation cmpIntpr[Nv];
+    std::fill_n(cmpIntpr, Nv, DataComponentInterpretation::component_is_scalar);
+    for(unsigned int i=0;i<dim;i++)
+      cmpIntpr[1+i]=cmpIntpr[4+i]=cmpIntpr[8+i]=
+            DataComponentInterpretation::component_is_part_of_vector;
+    
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "output");
 #endif
@@ -23,46 +32,15 @@ namespace mhd
     data_out.attach_triangulation(triangulation);
 
     std::vector<std::string> solution_names;
+    std::vector<DataComponentInterpretation::DataComponentInterpretation> 
+                             data_component_interpretation;
 
-    solution_names.push_back("Rho");
-    solution_names.push_back("u_x"); // x
-    solution_names.push_back("u_y"); // y
-    solution_names.push_back("u_z"); // z
-    solution_names.push_back("B_x"); // x
-    solution_names.push_back("B_y"); // y
-    solution_names.push_back("B_z"); // z
-    solution_names.push_back("p");
-    solution_names.push_back("J_x"); // x
-    solution_names.push_back("J_y"); // y
-    solution_names.push_back("J_z"); // z
-
-    std::vector<DataComponentInterpretation::DataComponentInterpretation>
-      data_component_interpretation(Nv,DataComponentInterpretation::component_is_scalar);
-    // works only for 3D
-    /*data_component_interpretation  // density
-      .push_back(DataComponentInterpretation::component_is_scalar);
-    data_component_interpretation  // velocity x
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // velocity y
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // velocity z
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // magnetic field x
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // magnetic field y
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // magnetic field z
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // pressure
-      .push_back(DataComponentInterpretation::component_is_scalar);
-    data_component_interpretation  // current density x
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // current density y
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);
-    data_component_interpretation  // current density z
-      .push_back(DataComponentInterpretation::component_is_part_of_vector);*/
+    for(unsigned int i=0;i<Nv;i++){
+      solution_names.push_back(names[dim-1][i]);
+      data_component_interpretation.push_back(cmpIntpr[i]);
+    }
     
-    
+    // TODO: implement DataPostprocessor for derived quantities
     LA::MPI::Vector &v=solution;
     LA::MPI::Vector &cds=distributed_solution;
     std::pair<types::global_dof_index, types::global_dof_index> range=v.local_range();
@@ -96,7 +74,7 @@ namespace mhd
     
     data_out.add_data_vector(dof_handler_s,eta, "eta");
     
-    data_out.build_patches();
+    data_out.build_patches(FEO+1);
     data_out.write_vtu(output);
     
     if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0){

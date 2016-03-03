@@ -49,10 +49,7 @@ namespace mhd
       vl[i] = lvq[qp](i);
       vo[i] = ovq[qp](i);
     }
-    double cf=0.9;
-    vl[1]*=cf;
-    vl[2]*=cf;
-    vl[3]*=cf;
+    double cf=0.75;
     vo[1]*=cf;
     vo[2]*=cf;
     vo[3]*=cf;
