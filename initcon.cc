@@ -8,8 +8,6 @@ namespace mhd
   void InitialValues<dim>::mhdBlast(const Point<dim> &p,
                                         Vector<double> &v) const
   {
-    const double GAMMA=5.0/3.0;
-
     if (p.norm()<0.1){ // 0.1
         v(7)=10.0/(GAMMA-1.0)+1.0; // U
     }else{
@@ -32,22 +30,24 @@ namespace mhd
   void InitialValues<dim>::harris(const Point<dim> &p,
                                         Vector<double> &v) const
   {
-    const double GAMMA=5.0/3.0;
-    double yy;
+    double yy,xx;
     double pressure;
+    
+    xx=p[0]-(box[1][0]+box[0][0])*0.5;
+    yy=p[1]-(box[1][1]+box[0][1])*0.5;
+    
     v(0)=1.0; // rho
     v(1)=0.0;//-.08*p[0]*p[0]*p[0]*exp(-p[0]*p[0]/12.0)*exp(-(p[1]-20)*(p[1]-20)/8.0); // v
     v(2)=0.0;
     v(3)=0.0;
-    yy=p[1]-20.0;
-    v(4)=4e-2*yy*exp(-(p[0]*p[0]+yy*yy)/8.0); // B
-    v(5)=std::tanh(p[0])-4e-2*p[0]*exp(-(p[0]*p[0]+yy*yy)/8.0);
+    v(4)=4e-2*yy*exp(-(xx*xx+yy*yy)/8.0); // B
+    v(5)=std::tanh(xx)-4e-2*xx*exp(-(xx*xx+yy*yy)/8.0);
     v(6)=0.0;
     pressure=0.05+1.0-v(5)*v(5);
     v(7)=pressure/(GAMMA-1.0)+v(5)*v(5)+v(1)*v(1); // U
     v(8)=0.0;  // J
     v(9)=0.0;
-    v(10)=1.0/(std::cosh(p[0])*std::cosh(p[0]));
+    v(10)=1.0/(std::cosh(xx)*std::cosh(xx));
     
   }
   
@@ -55,7 +55,6 @@ namespace mhd
   void InitialValues<dim>::debug(const Point<dim> &/*p*/,
                                         Vector<double> &v) const
   {
-    const double GAMMA=5.0/3.0;
     v(0)=1.0;
     v(1)=2.0;
     v(2)=3.0;
@@ -86,9 +85,31 @@ namespace mhd
   }
   
   template <int dim>
-  void InitialValues<dim>::setInitialCondition(int cond)
+  void InitialValues<dim>::setParameters(Params &pars)
   {
-    switch(cond){
+    int initCond;
+    
+    pars.prm.enter_subsection("Simulation");
+    {
+      initCond=pars.prm.get_integer("Initial condition");
+      GAMMA=pars.prm.get_double("gamma");
+      ETApar1=pars.prm.get_double("eta param 1");
+      ETApar2=pars.prm.get_double("eta param 2");
+      
+      pars.prm.enter_subsection("Box");
+      {
+        box[0][0]=pars.prm.get_double("x_min");
+        box[0][1]=pars.prm.get_double("y_min");
+        if (dim==3) box[0][2]=pars.prm.get_double("z_min");
+        box[1][0]=pars.prm.get_double("x_max");
+        box[1][1]=pars.prm.get_double("y_max");
+        if (dim==3) box[1][2]=pars.prm.get_double("z_max");
+      }
+      pars.prm.leave_subsection();
+    }
+    pars.prm.leave_subsection();
+    
+    switch(initCond){
       case 0:
         vectorValue=&InitialValues<dim>::mhdBlast;
         break;

@@ -14,7 +14,7 @@ namespace mhd
   public:
     InitialValues();
     
-    void setInitialCondition(int);
+    void setParameters(Params &);
     
     typedef void (InitialValues::*p2vctVal)(const Point<dim>&,
                                         Vector<double>&) const;
@@ -28,6 +28,11 @@ namespace mhd
                                         
     virtual void vector_value_list(const std::vector<Point<dim> >&,
                                     std::vector<Vector<double> >&) const;
+                                    
+    Point<dim> box[2];
+    double     GAMMA;
+    double     ETApar1;
+    double     ETApar2;
   };
   
   //template class InitialValues<1>;  // parallel version of deal does not support 1D

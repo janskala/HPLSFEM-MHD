@@ -74,7 +74,7 @@ namespace mhd
     
     data_out.add_data_vector(dof_handler_s,eta, "eta");
     
-    data_out.build_patches(FEO+1);
+    data_out.build_patches(FEO);
     data_out.write_vtu(output);
     
     if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0){

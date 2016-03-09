@@ -80,7 +80,6 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::setup_parameters(Params &pars)
   {
-    int initCond;
     pcout<<"Element degree: "<<fe.degree<<std::endl;
     
     mhdeq = new MHDequations<dim>(pars, mpi_communicator);
@@ -117,7 +116,6 @@ namespace mhd
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Simulation");
     {
-      initCond=pars.prm.get_integer("Initial condition");
       pars.prm.enter_subsection("Box");
       {
         boxP1[0]=pars.prm.get_double("x_min");
@@ -133,7 +131,7 @@ namespace mhd
     
     pars.setBC(&BCmap[0]);  // sets kind of BC for six box sides
     
-    initial_values.setInitialCondition(initCond);
+    initial_values.setParameters(pars);
   }
   
   template <int dim>
