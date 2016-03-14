@@ -360,7 +360,7 @@ namespace mhd
                   mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point); // call it before BC
                   
                   // get pointer to function which setup BC for given type defined in params
-                  int bi = cell->face(face_number)->boundary_indicator();
+                  int bi = cell->face(face_number)->boundary_id();
                   
                   const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
                   // call BC function and setup state vectors

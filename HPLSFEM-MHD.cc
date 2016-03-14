@@ -1,5 +1,4 @@
 #include "problem.h"
-#include "params.h"
 
 int main(int argc, char **argv)
 {

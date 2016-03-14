@@ -289,11 +289,12 @@ namespace mhd
         //if (v[i+0]<0.0) buf*=-1.0;
         // change velocity in order to conserve total energy
         rhs=rhc+0.5*(o[i+0]-rhc);
-        buf=rhs/o[i+0];
+        //buf=rhs/o[i+0];
         v[i+0]=rhs;
-        /*v[i+1]=o[i+1]*buf;
-        v[i+2]=o[i+2]*buf;
-        v[i+3]=o[i+3]*buf;*/
+        buf=0.1;
+        v[i+1]=buf*v[i+1]+(1.-buf)*o[i+1];
+        v[i+2]=buf*v[i+2]+(1.-buf)*o[i+2];
+        v[i+3]=buf*v[i+3]+(1.-buf)*o[i+3];
         
         //v[i+7]-=0.75*Uk;
         overflow=1;
