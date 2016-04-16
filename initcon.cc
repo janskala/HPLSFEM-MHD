@@ -24,6 +24,8 @@ namespace mhd
     v(8)=0.0;  // J
     v(9)=0.0;
     v(10)=0.0;
+    
+    v(11)=0.0; // eta
   }
   
   template <int dim>
@@ -49,6 +51,7 @@ namespace mhd
     v(9)=0.0;
     v(10)=1.0/(std::cosh(xx)*std::cosh(xx));
     
+    v(11)=0.0; // eta
   }
   
   template <int dim>
@@ -67,6 +70,8 @@ namespace mhd
     v(8)=9.0;
     v(9)=10.0;
     v(10)=11.0;
+    
+    v(11)=0.0; // eta
   }
   
   template <int dim>

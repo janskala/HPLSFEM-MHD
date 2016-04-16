@@ -87,11 +87,12 @@ namespace mhd
                          "Otherwise, a simple linearization method is used.");
       prm.enter_subsection("LS weights");
       {
-        prm.declare_entry("Rho", "1.0", Patterns::Double(0,9e99), "Density.");
+        prm.declare_entry("rho", "1.0", Patterns::Double(0,9e99), "Density.");
         prm.declare_entry("Pi", "1.0", Patterns::Double(0,9e99), "Momentum.");
         prm.declare_entry("B", "1.0", Patterns::Double(0,9e99), "Magnetic field.");
         prm.declare_entry("U", "1.0", Patterns::Double(0,9e99), "Total energy.");
         prm.declare_entry("J", "1.0", Patterns::Double(0,9e99), "Current density.");
+        prm.declare_entry("eta", "1.0", Patterns::Double(0,9e99), "Resistivity.");
         prm.declare_entry("div B", "1.0", Patterns::Double(0,9e99), "Additional div B = 0 equation.");
       }
       prm.leave_subsection();
@@ -203,7 +204,7 @@ namespace mhd
     {
       prm.enter_subsection("LS weights");
       {
-        w[0]=prm.get_double("Rho");
+        w[0]=prm.get_double("rho");
         w[1]=prm.get_double("Pi");
         w[2]=prm.get_double("Pi");
         w[3]=prm.get_double("Pi");
@@ -214,7 +215,8 @@ namespace mhd
         w[8]=prm.get_double("J");
         w[9]=prm.get_double("J");
         w[10]=prm.get_double("J");
-        w[11]=prm.get_double("div B");
+        w[11]=prm.get_double("eta");
+        w[12]=prm.get_double("div B");
       }
       prm.leave_subsection();
     }

@@ -16,8 +16,8 @@ SET(TARGET "HPLSFEM-MHD")
 # in the "CMake in user projects" page accessible from the "User info"
 # page of the documentation.
 SET(TARGET_SRC
-  ${TARGET}.cc problem.cc output.cc refine.cc initcon.cc equations.cc 
-  boundary.cc jacobi.cc params.cc resistivity.cc
+  ${TARGET}.cc problem.cc refine.cc initcon.cc equations.cc boundary.cc
+  jacobi.cc params.cc resistivity.cc postprocessor.cc output.cc
   )
 
 # Usually, you will not need to modify anything beyond this point...

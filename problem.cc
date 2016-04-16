@@ -12,8 +12,8 @@ namespace mhd
                     typename Triangulation<dim>::MeshSmoothing
                     (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-      dof_handler(triangulation), dof_handler_s(triangulation),
-      FEO(pars.getMinElementDegree()),fe(FE_Q<dim>(FEO), Nv),fes(FEO),
+      dof_handler(triangulation), //dof_handler_s(triangulation),
+      FEO(pars.getMinElementDegree()),fe(FE_Q<dim>(FEO), Nv),//fes(FEO),
       pcout(std::cout,
           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
 #ifdef USE_TIMER
@@ -25,27 +25,28 @@ namespace mhd
     setup_parameters(pars);
   }
   
-//   template <> // velocity is Arnold-Boffi-Falk (2D vectors) elements, B is Nedelec (2D vectors) elm. and the rest is Lagrange
-//   MHDProblem<2>::MHDProblem(Params &pars) :
-//       mpi_communicator(MPI_COMM_WORLD),
-//       triangulation(mpi_communicator,
-//                     typename Triangulation<2>::MeshSmoothing
-//                     (Triangulation<2>::smoothing_on_refinement |
-//                     Triangulation<2>::smoothing_on_coarsening)),
-//       dof_handler(triangulation), dof_handler_s(triangulation),
-//       FEO(pars.getMinElementDegree()),
-//       fe(FE_Q<2>(FEO), 1, FE_RaviartThomas<2>(FEO), 1, FE_Q<2>(FEO), 1, FE_Nedelec<2>(FEO), 1, FE_Q<2>(FEO), 5),
-//       fes(FEO),
-//       pcout(std::cout,
-//           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
-// #ifdef USE_TIMER
-//       ,computing_timer(mpi_communicator, pcout,
-//                     TimerOutput::summary,
-//                     TimerOutput::wall_times)
-// #endif
-//   {
-//     setup_parameters(pars);
-//   }
+  template <> // velocity is Arnold-Boffi-Falk (2D vectors) elements, B is Nedelec (2D vectors) elm. and the rest is Lagrange
+  MHDProblem<2>::MHDProblem(Params &pars) :
+      mpi_communicator(MPI_COMM_WORLD),
+      triangulation(mpi_communicator,
+                    typename Triangulation<2>::MeshSmoothing
+                    (Triangulation<2>::smoothing_on_refinement |
+                    Triangulation<2>::smoothing_on_coarsening)),
+      dof_handler(triangulation), //dof_handler_s(triangulation),
+      FEO(pars.getMinElementDegree()),
+      fe(FE_DGQ<2>(FEO), 1, FE_Q<2>(FEO), 7,FE_Q<2>(FEO), 4),
+      //fe(FE_Q<2>(FEO), 1, FE_RaviartThomas<2>(FEO), 1, FE_Q<2>(FEO), 1, FE_Nedelec<2>(FEO), 1, FE_Q<2>(FEO), 6),
+      //fes(FEO),
+      pcout(std::cout,
+          (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
+#ifdef USE_TIMER
+      ,computing_timer(mpi_communicator, pcout,
+                    TimerOutput::summary,
+                    TimerOutput::wall_times)
+#endif
+  {
+    setup_parameters(pars);
+  }
   
 //   template <>  // velocity is Arnold-Boffi-Falk (3D vectors) elements, B is Nedelec (3D vectors) elm. and the rest is Lagrange
 //   MHDProblem<3>::MHDProblem(Params &pars) :
@@ -54,10 +55,10 @@ namespace mhd
 //                     typename Triangulation<3>::MeshSmoothing
 //                     (Triangulation<3>::smoothing_on_refinement |
 //                     Triangulation<3>::smoothing_on_coarsening)),
-//       dof_handler(triangulation), dof_handler_s(triangulation),
+//       dof_handler(triangulation), //dof_handler_s(triangulation),
 //       FEO(pars.getMinElementDegree()),
-//       fe(FE_Q<3>(FEO), 1, FE_RaviartThomas<3>(FEO), 1, FE_Nedelec<3>(FEO), 1, FE_Q<3>(FEO), 4),
-//       fes(FEO),
+//       fe(FE_Q<3>(FEO), 1, FE_RaviartThomas<3>(FEO), 1, FE_Nedelec<3>(FEO), 1, FE_Q<3>(FEO), 5),
+//       //fes(FEO),
 //       pcout(std::cout,
 //           (Utilities::MPI::this_mpi_process(mpi_communicator) == 0))
 // #ifdef USE_TIMER
@@ -73,7 +74,8 @@ namespace mhd
   MHDProblem<dim>::~MHDProblem()
   {
     dof_handler.clear();
-    dof_handler_s.clear();
+    //dof_handler_s.clear();
+    delete [] operator_matrixes;
     delete mhdeq;
   }
   
@@ -81,8 +83,6 @@ namespace mhd
   void MHDProblem<dim>::setup_parameters(Params &pars)
   {
     pcout<<"Element degree: "<<fe.degree<<std::endl;
-    
-    mhdeq = new MHDequations<dim>(pars, mpi_communicator);
     
     pcout<<"Parsing parameters"<<std::endl;
     pars.prm.enter_subsection("Output");
@@ -132,6 +132,57 @@ namespace mhd
     pars.setBC(&BCmap[0]);  // sets kind of BC for six box sides
     
     initial_values.setParameters(pars);
+    
+    mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
+  }
+  
+  template <int dim>
+  void MHDProblem<dim>::setDofMapping()
+  {
+    // Set mapping from dof to system component and vice versa
+    QGauss<dim> quadrature(FEO+1);
+    double intFEval;
+    FEValues<dim> fe_values(fe, quadrature, update_values | update_quadrature_points);
+    fe_values.reinit(dof_handler.begin_active());
+    for(unsigned int i=0;i<fe_values.dofs_per_cell;i++)
+      for(unsigned int k=0;k<Nv;k++){
+        intFEval=0.0;
+        for(unsigned int l=0;l<fe_values.n_quadrature_points;l++)     // sum it for all q_points
+          intFEval+=std::fabs(fe_values.shape_value_component(i,l,k));
+        if (intFEval>1e-6){ 
+          stv2dof.cmpInx.push_back(k);
+          stv2dof.dof.push_back(i);
+        }
+      }
+    stv2dof.Ndofs=stv2dof.cmpInx.size();
+    
+    //std::vector<std::array<int, Nv>> stateD;
+    std::vector<unsigned int> indx(stv2dof.cmpInx);
+    std::vector<unsigned int> dof(stv2dof.dof);
+    unsigned int i=0; // index of the state vector
+    for(;;){  // create state vector mapping
+      if (indx.size()==0) break;
+      stv2dof.stateD.push_back(std::array<unsigned int, Nv>());
+      for(unsigned int k=0;k<Nv;k++){ // we need to find all variables to construct one state vector
+        unsigned int l,ins=indx.size();
+        for(l=0;l<ins;l++)
+          if (indx[l]==k){
+            stv2dof.stateD[i][k]=dof[l];
+            indx.erase(indx.begin()+l);
+            dof.erase(dof.begin()+l);
+            break;
+          }
+        if (l==ins) stv2dof.stateD[i][k]=-1; // nothing is found - no more corresponding basis fce.
+      }
+      i++;
+    }
+    stv2dof.Nstv=stv2dof.stateD.size();
+    
+    mhdeq->reinitFEval();
+    
+    operator_matrixes = new FullMatrix<double>[stv2dof.Nstv];
+    for(unsigned int i=0;i<stv2dof.Nstv;i++)
+        operator_matrixes[i].reinit(Ne,Nv);
   }
   
   template <int dim>
@@ -175,12 +226,12 @@ namespace mhd
     shockIndicator=1.0;
     shockWeights=1.0;
     // make a array for eta
-    dof_handler_s.distribute_dofs(fes);
-    local_dofs = dof_handler_s.locally_owned_dofs();
-    DoFTools::extract_locally_relevant_dofs(dof_handler_s,
-                                         local_relevant_dofs);
-    eta.reinit(local_dofs, local_relevant_dofs, mpi_communicator); 
-    eta_dist.reinit(local_dofs, mpi_communicator);  // for solver - no ghosts
+    //dof_handler_s.distribute_dofs(fes);
+    //local_dofs = dof_handler_s.locally_owned_dofs();
+    //DoFTools::extract_locally_relevant_dofs(dof_handler_s,
+    //                                     local_relevant_dofs);
+//     eta.reinit(local_dofs, local_relevant_dofs, mpi_communicator); 
+//     eta_dist.reinit(local_dofs, mpi_communicator);  // for solver - no ghosts
   }
   
   template <int dim>
@@ -190,13 +241,13 @@ namespace mhd
     TimerOutput::Scope t(computing_timer, "assembly");
 #endif
     double *weights=mhdeq->getWeights();
-    QGauss<dim>  quadrature_formula(FEO+1);
-    QGauss<dim-1> face_quadrature_formula(FEO+1);
+    QGauss<dim>  quadrature_formula(FEO+2);
+    QGauss<dim-1> face_quadrature_formula(FEO+2);
     
-    FEValues<dim> fes_values(fes, quadrature_formula,
-                             update_values   | update_gradients);
-    FEFaceValues<dim> fes_face_values(fes, face_quadrature_formula,
-                             update_values   | update_gradients);
+//     FEValues<dim> fes_values(fes, quadrature_formula,
+//                              update_values   | update_gradients);
+//     FEFaceValues<dim> fes_face_values(fes, face_quadrature_formula,
+//                              update_values   | update_gradients);
 
     FEValues<dim> fe_values(fe, quadrature_formula,
                              update_values   | update_gradients |
@@ -210,7 +261,6 @@ namespace mhd
     const unsigned int   n_q_points    = quadrature_formula.size();
     const unsigned int   n_f_q_points   = face_quadrature_formula.size();
 
-    FullMatrix<double>   *operator_matrixes;
     Vector<double>       cell_rhs_lin(Ne);
     FullMatrix<double>   cell_matrix(dofs_per_cell, dofs_per_cell);
     Vector<double>       cell_rhs(dofs_per_cell);
@@ -236,42 +286,37 @@ namespace mhd
 
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
-    RightHandSide<dim>      right_hand_side;
+    //typename MHDequations<dim>::RightHandSide      right_hand_side;
     std::vector<Vector<double> > rhs_values(n_q_points, Vector<double>(Ne));
     std::vector<Vector<double> > init_values(n_q_points, Vector<double>(Nv));
     //std::vector<Vector<double> > feval(n_q_points, Vector<double>(4));
-
-
-    operator_matrixes = new FullMatrix<double>[dofs_per_cell/(Nv)];
-    for(unsigned int i=0;i<dofs_per_cell/Nv;i++)
-        operator_matrixes[i].reinit(Ne,Nv);
 
     system_matrix=0.0;
     system_rhs=0.0;
     
     // Now we can begin with the loop over all cells:
     typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(),
-                                                   endc = dof_handler.end(),
-                                                   cells = dof_handler_s.begin_active();
+                                                   endc = dof_handler.end();//,
+//                                                    cells = dof_handler_s.begin_active();
     unsigned int cellNo=0;
-    for(; cell!=endc; ++cell,++cells,++cellNo)
+    for(; cell!=endc; ++cell,++cellNo)
       if (cell->is_locally_owned()){
         
         cell_matrix = 0;
         cell_rhs = 0;
 
         fe_values.reinit(cell);
-        fes_values.reinit(cells);
+//         fes_values.reinit(cells);
         
         fe_values.get_function_values(old_solution, old_sv);
         fe_values.get_function_gradients(old_solution, old_sg);
         fe_values.get_function_values(lin_solution, lin_sv);
         fe_values.get_function_gradients(lin_solution, lin_sg);
 //         fe_values.get_function_values(residue, cell_residue);
-        fes_values.get_function_values(eta, eta_v);
-        fes_values.get_function_gradients(eta, eta_g);
+//         fes_values.get_function_values(eta, eta_v);
+//         fes_values.get_function_gradients(eta, eta_g);
 
-        right_hand_side.vector_value_list(fe_values.get_quadrature_points(),
+        mhdeq->rhs.vector_value_list(fe_values.get_quadrature_points(),
                                            rhs_values);
 
         // determine error on the cell for choosing way of constructing matrix
@@ -303,19 +348,23 @@ namespace mhd
           // hand side vector.
           for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
             
-            mhdeq->set_state_vector_for_qp(lin_sv, lin_sg, old_sv, old_sg, eta_v, eta_g, q_point);
+            mhdeq->set_state_vector_for_qp(lin_sv, lin_sg, old_sv, old_sg, q_point);
             
             mhdeq->setFEvals(fe_values,dofs_per_cell,q_point);
             
             mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
             
             mhdeq->set_rhs(cell_rhs_lin);
-            for(unsigned int i=0; i<dofs_per_cell/Nv; i++){
-              for(unsigned int j=0; j<dofs_per_cell/Nv; j++){
+            for(unsigned int i=0; i<stv2dof.Nstv; i++){
+              for(unsigned int j=0; j<stv2dof.Nstv; j++){
                 for(unsigned int k=0; k<Nv; k++){
+                  int dof_i=stv2dof.stateD[i][k];
+                  if (dof_i<0) continue;
                   for(unsigned int l=0; l<Nv; l++){
+                    int dof_j=stv2dof.stateD[j][l];
+                    if (dof_j<0) continue;
                     for(unsigned int m=0; m<Ne; m++){
-                        cell_matrix(i*Nv+k,j*Nv+l) +=
+                        cell_matrix(dof_i,dof_j) +=
                             operator_matrixes[i](m,k)*
                             operator_matrixes[j](m,l)*
                             weights[m]*fe_values.JxW(q_point);
@@ -324,14 +373,13 @@ namespace mhd
                 }
               }
               // Assembling the right hand side
-              for(unsigned int l=0; l<Ne; l++){
-                for(unsigned int k=0; k<Nv; k++){
-                  //pcout<<k<<" "<<l<<' '<<cell_rhs(i*Ne+k)<<"\n";
-                  cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
+              for(unsigned int k=0; k<Nv; k++){
+                int dof_i=stv2dof.stateD[i][k];
+                if (dof_i<0) continue;
+                for(unsigned int l=0; l<Ne; l++)
+                  cell_rhs(dof_i) += operator_matrixes[i](l,k)*
                         (rhs_values[q_point](l)+cell_rhs_lin(l))*
                         weights[l]*fe_values.JxW(q_point);
-                }
-                  //pcout<<"i:"<<i*Ne<<" "<<k<<' '<<cell_rhs(i*Ne+k)<<"\n";
               }
 
             } // end of i-loop
@@ -341,17 +389,17 @@ namespace mhd
           for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
             if (cell->face(face_number)->at_boundary()){
                 fe_face_values.reinit(cell, face_number);
-                fes_face_values.reinit(cells, face_number);
+//                 fes_face_values.reinit(cells, face_number);
                 
                 fe_face_values.get_function_values(old_solution, old_svf);
                 fe_face_values.get_function_gradients(old_solution, old_sgf);
                 fe_face_values.get_function_values(lin_solution, lin_svf);
                 fe_face_values.get_function_gradients(lin_solution, lin_sgf);
                 //std::cout<<"here 0\n";
-                fes_face_values.get_function_values(eta, eta_vf);
-                fes_face_values.get_function_gradients(eta, eta_gf);
+//                 fes_face_values.get_function_values(eta, eta_vf);
+//                 fes_face_values.get_function_gradients(eta, eta_gf);
                 //std::cout<<"here 1\n";
-                right_hand_side.vector_value_list(fe_face_values.get_quadrature_points(),
+                mhdeq->rhs.vector_value_list(fe_face_values.get_quadrature_points(),
                                             rhs_values);
                 initial_values.vector_value_list(fe_face_values.get_quadrature_points(),
                                             init_values);
@@ -365,7 +413,7 @@ namespace mhd
                   const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
                   // call BC function and setup state vectors
                   (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
-                              lin_svf, lin_sgf, old_svf, old_sgf, init_values,eta_vf,eta_gf,
+                              lin_svf, lin_sgf, old_svf, old_sgf, init_values,
                               nrm, q_point);
                   
                   mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point);
@@ -373,12 +421,16 @@ namespace mhd
                   mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
             
                   mhdeq->set_rhs(cell_rhs_lin);
-                  for(unsigned int i=0; i<dofs_per_cell/Nv; i++){ // unfortunately we have to go all over the dofs_per_cell
-                    for(unsigned int j=0; j<dofs_per_cell/Nv; j++){ //   dofs_per_face do no cointains proper basis fce
+                  for(unsigned int i=0; i<stv2dof.Nstv; i++){ // unfortunately we have to go all over the dofs_per_cell
+                    for(unsigned int j=0; j<stv2dof.Nstv; j++){ //   dofs_per_face does not cointain proper basis fce
                       for(unsigned int k=0; k<Nv; k++){
+                      int dof_i=stv2dof.stateD[i][k];
+                      if (dof_i<0) continue;
                         for(unsigned int l=0; l<Nv; l++){
-                          for(unsigned int m=0; m<Ne; m++){
-                              cell_matrix(i*Nv+k,j*Nv+l) +=
+                          int dof_j=stv2dof.stateD[j][l];
+                          if (dof_j<0) continue;
+                            for(unsigned int m=0; m<Ne; m++){
+                              cell_matrix(dof_i,dof_j) +=
                                   operator_matrixes[i](m,k)*
                                   operator_matrixes[j](m,l)*
                                   weights[m]*fe_face_values.JxW(q_point); // /cell->diameter()
@@ -387,9 +439,11 @@ namespace mhd
                       }
                     }
                     // Assembling the right hand side
-                    for(unsigned int l=0; l<Ne; l++)
-                      for(unsigned int k=0; k<Nv; k++){
-                        cell_rhs(i*Nv+k) += operator_matrixes[i](l,k)*
+                    for(unsigned int k=0; k<Nv; k++){
+                      int dof_i=stv2dof.stateD[i][k];
+                      if (dof_i<0) continue;
+                      for(unsigned int l=0; l<Ne; l++)
+                        cell_rhs(dof_i) += operator_matrixes[i](l,k)*
                               (rhs_values[q_point](l)+cell_rhs_lin(l))*
                               weights[l]*fe_face_values.JxW(q_point); // /cell->diameter()
                       }
@@ -400,7 +454,7 @@ namespace mhd
         //}  // no linearization condition
 
         // The transfer from local degrees of freedom into the global matrix
-        cell->get_dof_indices(local_dof_indices); // TODO: Matrix is symetric, optimalization is needed!
+        cell->get_dof_indices(local_dof_indices); // TODO: Matrix is symetric, optimalization is possible!
         constraints.distribute_local_to_global(cell_matrix,
                                               cell_rhs,
                                               local_dof_indices,
@@ -412,8 +466,6 @@ namespace mhd
 
     system_matrix.compress(VectorOperation::add);
     system_rhs.compress(VectorOperation::add);
-
-    delete [] operator_matrixes;
   }
   
   template <int dim>
@@ -454,7 +506,7 @@ namespace mhd
     unsigned int time_step=0;
     unsigned int iter,linReset;
     double lastErr,err;
-    bool overflow;
+    //bool overflow=false;
     double sz[dim],maxSiz=0.0;
     std::vector<unsigned int> rep(dim);
 
@@ -468,12 +520,14 @@ namespace mhd
     GridGenerator::subdivided_hyper_rectangle(triangulation, rep, boxP1, boxP2, true); // set box and colorize boundaries
     triangulation.refine_global(initSplit); // 6
     pcout << "   initial mesh, ndofs: "<< dof_handler.n_dofs() << std::endl;
-    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation));
+    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
     setup_system();
+    setDofMapping();
+    
     pcout<<"Refine gradients in initial conditions..."<<std::endl;
     for(unsigned int i=0;i<initRefin;i++){ // 5
       project_initial_conditions();
-      mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
+      //mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
       //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
       solution = distributed_solution;  // copy results to the solution (it includes ghosts)
       //refine_grid_simple();  // error estimator does not work
@@ -489,10 +543,11 @@ namespace mhd
     pcout << "   Setting initial conditions..."<<std::endl;
 
     project_initial_conditions();
-    mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
+    //mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
+    corrections();
     solution = distributed_solution;  // copy results to the solution (it includes ghosts)
-    (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
-    mhdeq->checkDt(solution);         // find and set dt
+    //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+    //mhdeq->checkDt(solution);         // find and set dt
     mhdeq->setNewDt();
     
     pcout << "   First output."<<std::endl;
@@ -509,8 +564,9 @@ namespace mhd
         for(;;){ // linearization - do one time step
             assemble_system(iter);
             sitr += solve();
-            overflow=mhdeq->checkOverflow(distributed_solution,old_solution);
-            solution=distributed_solution;
+            //overflow=mhdeq->checkOverflow(distributed_solution,old_solution);
+            corrections();
+            //solution=distributed_solution;
             //mhdeq->checkDt(solution);
             system_rhs=lin_solution;
             system_rhs-=distributed_solution;
@@ -540,8 +596,8 @@ namespace mhd
 //                  << " res: "<<err<<
 //                  " vmax="<<mhdeq->getVmax()<<" "<<overflow<<std::endl;
         }
-        (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
-        mhdeq->checkDt(solution);
+        //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+        //mhdeq->checkDt(solution);
         if (time_step%1==0) pcout << "l. it.: " << iter << 
                                           " s. it.:"<< sitr << 
                                           " dt="<<mhdeq->getDt()<<
@@ -561,6 +617,7 @@ namespace mhd
           setShockSmoothCoef(); // set refinement coeficients
           refine_grid_rule();
           void_step();          // clean div B
+          corrections();
           /*distributed_solution=solution;
           mhdeq->checkOverflow(distributed_solution,solution);
           old_solution=distributed_solution;
@@ -583,8 +640,8 @@ namespace mhd
     solve();
     mhdeq->checkOverflow(distributed_solution,old_solution);
     solution=distributed_solution;
-    (mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
-    mhdeq->checkDt(solution);
+    //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
+    //mhdeq->checkDt(solution);
     mhdeq->setNewDt();
   }
   
@@ -593,7 +650,7 @@ namespace mhd
   {
     QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
     FEValues<dim> fe_values(fe, quadrature,
-                             update_values   | update_gradients |
+                             update_values   | //update_gradients |
                              update_quadrature_points | update_JxW_values);
     const unsigned int dofs_per_cell = fe_values.dofs_per_cell,
                        n_q_points    = fe_values.n_quadrature_points;
@@ -607,8 +664,7 @@ namespace mhd
     typename DoFHandler<dim>::active_cell_iterator
     cell = dof_handler.begin_active(),
     endc = dof_handler.end();
-    unsigned int cellNo=0;
-    for(; cell!=endc; ++cell,++cellNo)
+    for(; cell!=endc; ++cell)
       if(cell->is_locally_owned()){
           fe_values.reinit(cell);
           initial_values.vector_value_list(fe_values.get_quadrature_points(),
@@ -618,15 +674,102 @@ namespace mhd
               
           for(unsigned int point=0; point<n_q_points; ++point){
           
-            for(unsigned int i=0; i<dofs_per_cell; ++i){
-              const unsigned int cmp_i = fe.system_to_component_index(i).first;
-              cell_rhs(i) += rhs_values[point][cmp_i]*
-                                fe_values.shape_value(i,point)*
+            for(unsigned int i=0; i<stv2dof.Ndofs; ++i){
+              const unsigned int cmp_i = stv2dof.cmpInx[i];
+              const unsigned int dof_i = stv2dof.dof[i];
+              cell_rhs(dof_i) += rhs_values[point][cmp_i]*
+                                fe_values.shape_value_component(dof_i,point,cmp_i)*
                                 fe_values.JxW(point);
                                 
-              cell_matrix(i,i) += fe_values.shape_value(i,point)*
-                                fe_values.shape_value(i,point)*
+              cell_matrix(dof_i,dof_i) += fe_values.shape_value_component(dof_i,point,cmp_i)*
+                                fe_values.shape_value_component(dof_i,point,cmp_i)*
                                 fe_values.JxW(point);
+
+            }
+          }
+          cell->get_dof_indices(local_dof_indices);
+          constraints.distribute_local_to_global(cell_matrix,
+                                                cell_rhs,
+                                                local_dof_indices,
+                                                system_matrix,
+                                                system_rhs);       
+        }
+    system_matrix.compress(VectorOperation::add);
+    system_rhs.compress(VectorOperation::add);
+    
+    solve();
+  }
+  
+  template <int dim>
+  void MHDProblem<dim>::corrections()
+  {
+    double RHSvalue,Uk,Um,buf;
+    QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
+    FEValues<dim> fe_values(fe, quadrature,
+                             update_values   | //update_gradients |
+                             update_quadrature_points | update_JxW_values);
+    const unsigned int dofs_per_cell = fe_values.dofs_per_cell,
+                       n_q_points    = fe_values.n_quadrature_points;
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+    Vector<double> cell_rhs(dofs_per_cell);
+    FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
+    std::vector<Vector<double> >  ov(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  lv(n_q_points, Vector<double>(Nv));
+    
+    
+    system_matrix=0.0;
+    system_rhs=0.0;
+    typename DoFHandler<dim>::active_cell_iterator
+    cell = dof_handler.begin_active(),
+    endc = dof_handler.end();
+    for(; cell!=endc; ++cell)
+      if(cell->is_locally_owned()){
+          fe_values.reinit(cell);
+          
+          fe_values.get_function_values(old_solution, ov);
+          fe_values.get_function_values(solution, lv);
+          
+          cell_rhs = 0;
+          cell_matrix = 0;
+              
+          for(unsigned int p=0; p<n_q_points; ++p){
+          
+            for(unsigned int i=0; i<stv2dof.Ndofs; ++i){
+              const unsigned int cmp_i = stv2dof.cmpInx[i];
+              const unsigned int dof_i = stv2dof.dof[i];
+              switch(cmp_i){
+                case 0:  // density
+                  RHSvalue=lv[p][cmp_i];
+                  if (RHSvalue<0.1) RHSvalue=0.1;
+                  break;
+                case 7:  // pressure
+                  RHSvalue=lv[p][cmp_i];
+                  Uk=(lv[p][1]*lv[p][1]+lv[p][2]*lv[p][2]+lv[p][3]*lv[p][3])/(lv[p][0]);
+                  Um=lv[p][4]*lv[p][4]+lv[p][5]*lv[p][5]+lv[p][6]*lv[p][6];
+                  buf=Um+Uk;
+                  if ((RHSvalue-buf)<1e-6) RHSvalue=buf+1e-6;
+                  break;
+//                 case 1:
+//                 case 2:
+//                 case 3:
+//                 case 4:
+//                 case 5:
+//                 case 6:
+//                 case 8:
+//                 case 9:
+//                 case 10:
+//                 case 11:
+                default:
+                  RHSvalue=lv[p][cmp_i];
+                break;
+              }
+              cell_rhs(dof_i) += RHSvalue*
+                                fe_values.shape_value_component(dof_i,p,cmp_i)*
+                                fe_values.JxW(p);
+                                
+              cell_matrix(dof_i,dof_i) += fe_values.shape_value_component(dof_i,p,cmp_i)*
+                                fe_values.shape_value_component(dof_i,p,cmp_i)*
+                                fe_values.JxW(p);
 
             }
           }

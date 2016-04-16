@@ -55,9 +55,10 @@ namespace LA
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/fe_system.h>  // vector-valued finite elements
 #include <deal.II/fe/fe_q.h>       // Q1 elements - H1
-// #include <deal.II/fe/fe_nedelec.h> // Nedelec elements - Hcurl -- up to 7th order
+#include <deal.II/fe/fe_dgq.h>     // Discontinuous elements 
+#include <deal.II/fe/fe_nedelec.h> // Nedelec elements - Hcurl -- up to 7th order
 //#include <deal.II/fe/fe_abf.h>     // Arnold-Boffi-Falk (ABF) elements - Hdiv -- only supports 2nd order!
-// #include <deal.II/fe/fe_raviart_thomas.h>  // Raviart-Thomas elements
+#include <deal.II/fe/fe_raviart_thomas.h>  // Raviart-Thomas elements
 
 #include "equations.h"
 #include "initcon.h"
@@ -88,25 +89,29 @@ namespace mhd
     void transfer_solution();
     void output_results(const unsigned int cycle);
     void project_initial_conditions();
+    void corrections();
     void void_step();
+    void setDofMapping();
 
     MPI_Comm             mpi_communicator;
     
     parallel::distributed::
       Triangulation<dim> triangulation;
     DoFHandler<dim>      dof_handler;
-    DoFHandler<dim>      dof_handler_s;
+//     DoFHandler<dim>      dof_handler_s;
     
     int                  FEO;
     FESystem<dim>        fe;
-    FE_Q<dim>            fes;  // FE for single variable
+//     FE_Q<dim>            fes;  // FE for single variable
 
     ConstraintMatrix     constraints;
     
+    FullMatrix<double>*  operator_matrixes;
+    
     IndexSet             locally_owned_dofs;
     IndexSet             locally_relevant_dofs;
-    IndexSet             local_dofs;  // eta dofs
-    IndexSet             local_relevant_dofs;  // eta
+//     IndexSet             local_dofs;  // eta dofs
+//     IndexSet             local_relevant_dofs;  // eta
 
     LA::MPI::SparseMatrix system_matrix;
 
@@ -116,7 +121,7 @@ namespace mhd
     LA::MPI::Vector       system_rhs;
     LA::MPI::Vector       residue;
     LA::MPI::Vector       distributed_solution; // for solver
-    LA::MPI::Vector       eta,eta_dist;
+//     LA::MPI::Vector       eta,eta_dist;
     Vector<float>         shockIndicator;
     //BlockVector<float>   shockWeights;
     Vector<float>         shockWeights;
@@ -145,6 +150,10 @@ namespace mhd
     double meshCoaGrad;
     unsigned int initSplit;
     unsigned int initRefin;
+    
+    mapDoFs stv2dof;    // state vectors to the dofs and dofs to state vectors
+    
+    //class Postprocessor;  // the derived quatities for output
   };
   
   //template class MHDProblem<1>;  // parallel version of deal does not support 1D

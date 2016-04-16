@@ -33,7 +33,7 @@ namespace mhd
     transfer_solution();
     
     //cell = triangulation.begin_active(triangulation.n_levels()-1);
-    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation));
+    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
   }
   
   template <int dim>
@@ -61,7 +61,7 @@ namespace mhd
     transfer_solution();
     
     //cell = triangulation.begin_active(triangulation.n_levels()-1);
-    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation));
+    mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
   }
   
   template <int dim>
