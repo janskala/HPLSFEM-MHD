@@ -215,6 +215,9 @@ namespace mhd
   {
     clcMat=&MHDequations::set_operators_full;
     clcRhs=&MHDequations::set_rhs_CN;
+    DIRK.method=-1;
+    DIRK.maxStage=-1;
+    DIRK.stage=-1;
   }
   
   template <int dim>
@@ -293,12 +296,12 @@ namespace mhd
                         const unsigned int qp)
   {
     // set state vector values
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
     
     // ... and for gradients
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)
         for(unsigned int i = 0; i < Nv; i++)
           G[k][j][i]=(*Gqp[k])[qp][i][j];
@@ -333,15 +336,17 @@ namespace mhd
   template <int dim>
   void MHDequations<dim>::calucate_matrix_rhs(FullMatrix<double> *O, Vector<double> &F)
   {
+  std::cout<<"0here!";
     (this->*clcMat)(O);
+std::cout<<"1here!";
     (this->*clcRhs)(F);
   }
   
   template <int dim>
   void MHDequations<dim>::set_operators_full(FullMatrix<double> *O)
   {
-    JacobiM(V[0]);
-    if (NRLin) dxA(V[0],G[0]);
+    JacobiM(V[1]);
+    if (NRLin) dxA(V[1],G[1]);
     
     for(unsigned int i=0;i<stv2dof.Nstv;i++){
       double thdt=theta*dt;
@@ -407,10 +412,10 @@ namespace mhd
   {
     double sum[Nt],sum2[Nt],dtth,dtoth;
     
-    JacobiM(V[1]);
+    JacobiM(V[0]);
     
     for(unsigned int k=0;k<Nt;k++){
-      F[k]=V[1][k];
+      F[k]=V[0][k];
       sum[k]=sum2[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
@@ -418,12 +423,12 @@ namespace mhd
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum2[k]+=B[k][l]*V[0][l];
+          sum2[k]+=B[k][l]*V[1][l];
     
     for(unsigned int d=0;d<dim;d++)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum[k]+=A[d][k][l]*G[1][d][l];
+          sum[k]+=A[d][k][l]*G[0][d][l];
       
     dtth=-dt*theta;
     dtoth=dt*(1.0-theta);
@@ -431,21 +436,21 @@ namespace mhd
       F[k]-=dtoth*sum[k]+dtth*sum2[k];
     
     // add gravity terms
-    F[1]+=gravity[0]*V[1][0]*dtoth;
-    F[2]+=gravity[1]*V[1][0]*dtoth;
-    F[3]+=gravity[2]*V[1][0]*dtoth;
-    F[7]+=dtoth*(gravity[0]*V[1][1]+gravity[1]*V[1][2]+gravity[2]*V[1][3]);
+    F[1]+=gravity[0]*V[0][0]*dtoth;
+    F[2]+=gravity[1]*V[0][0]*dtoth;
+    F[3]+=gravity[2]*V[0][0]*dtoth;
+    F[7]+=dtoth*(gravity[0]*V[0][1]+gravity[1]*V[0][2]+gravity[2]*V[0][3]);
 
-    F[11]=dt*(this->*setEta)(1);  // calculate it from old time values
+    F[11]=dt*(this->*setEta)(0);  // calculate it from old time values
   }
   
     template <int dim>
   void MHDequations<dim>::set_rhs_DIRK(Vector<double> &F)
   {
     double sum[Nt],dtth;
-
+std::cout<<"here!";
     for(unsigned int k=0;k<Nt;k++){
-      F[k]=V[1][k];
+      F[k]=V[0][k];
       sum[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
@@ -453,16 +458,16 @@ namespace mhd
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum[k]+=B[k][l]*V[0][l];
+          sum[k]+=B[k][l]*V[1][l];
     
     dtth=-dt*theta;
     for(unsigned int k=0;k<Nt;k++)
       F[k]-=dtth*sum[k];
 
-    F[11]=dt*(this->*setEta)(1);
+    F[11]=dt*(this->*setEta)(0);
     
-    for(unsigned int l=0;DIRK.stages[DIRK.stage]-1;l++){
-      int lStage=1+DIRK.stage;
+    for(unsigned int l=0;DIRK.stages[DIRK.stage];l++){
+      int lStage=2+DIRK.stage;
       JacobiM(V[lStage]);
       
       for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
@@ -579,22 +584,22 @@ namespace mhd
     
     iRh=1.0/V[0][0];
     iRh2=iRh*iRh;
-    B2=V[0][4]*V[0][4]+V[0][5]*V[0][5]+V[0][6]*V[0][6];
-    buf=(V[0][1]*V[0][1]+V[0][2]*V[0][2]+V[0][3]*V[0][3])*iRh+B2;
+    B2=V[1][4]*V[1][4]+V[1][5]*V[1][5]+V[1][6]*V[1][6];
+    buf=(V[1][1]*V[1][1]+V[1][2]*V[1][2]+V[1][3]*V[1][3])*iRh+B2;
     
-    p=GAMMA*(GAMMA-1.0)*(V[0][7]-buf); // gamma*p
+    p=GAMMA*(GAMMA-1.0)*(V[1][7]-buf); // gamma*p
     a=(p+B2)*iRh;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][4]*V[0][4]*iRh2)));
-    if (V[0][1]>0.0) vlc=V[0][1]*iRh+cf;
-    else vlc=V[0][1]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][4]*V[1][4]*iRh2)));
+    if (V[1][1]>0.0) vlc=V[1][1]*iRh+cf;
+    else vlc=V[1][1]*iRh-cf;
     buf=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][5]*V[0][5]*iRh2)));
-    if (V[0][2]>0.0) vlc=V[0][2]*iRh+cf;
-    else vlc=V[0][2]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][5]*V[1][5]*iRh2)));
+    if (V[1][2]>0.0) vlc=V[1][2]*iRh+cf;
+    else vlc=V[1][2]*iRh-cf;
     buf+=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][6]*V[0][6]*iRh2)));
-    if (V[0][3]>0.0) vlc=V[0][3]*iRh+cf;
-    else vlc=V[0][3]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][6]*V[1][6]*iRh2)));
+    if (V[1][3]>0.0) vlc=V[1][3]*iRh+cf;
+    else vlc=V[1][3]*iRh-cf;
     buf+=vlc*vlc;
     
     vlc=sqrt(buf); // fast magnetoacustic wave speed

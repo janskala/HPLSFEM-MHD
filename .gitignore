@@ -11,3 +11,4 @@ Makefile
 HPLSFEM-MHD
 results/*
 results-1
+host.list

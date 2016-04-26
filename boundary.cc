@@ -11,12 +11,12 @@ namespace mhd
                         const unsigned int qp)                           // qp
   {
     // set state vector values
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
       
     // ... and for gradients
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)
         for(unsigned int i = 0; i < Nv; i++)
           G[k][j][i]=0.0;
@@ -36,30 +36,30 @@ namespace mhd
       if (std::fabs(n[j])>0.5) n0=j;
       
     // set state vector values
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
     
     double cf=0.9;
-    V[1][1]*=cf;
-    V[1][2]*=cf;
-    V[1][3]*=cf;
-    cf=0.8;
     V[0][1]*=cf;
     V[0][2]*=cf;
     V[0][3]*=cf;
-    for(unsigned int k = 2; k < 2+DIRK.stage; k++){
-      V[0][1]*=cf;
-      V[0][2]*=cf;
-      V[0][3]*=cf;
+    cf=0.8;
+    V[1][1]*=cf;
+    V[1][2]*=cf;
+    V[1][3]*=cf;
+    for(int k = 2; k <= 2+DIRK.stage; k++){
+      V[1][1]*=cf;
+      V[1][2]*=cf;
+      V[1][3]*=cf;
     }
     // ... and for gradients
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)
         for(unsigned int i = 0; i < Nv; i++)
           G[k][j][i]=(*Gqp[k])[qp][i][j];
         
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++){
+    for(int k = 0; k <= 2+DIRK.stage; k++){
      G[k][n0][1]=0.0;  // velocity
      G[k][n0][2]=0.0;
      G[k][n0][3]=0.0;
@@ -82,22 +82,22 @@ namespace mhd
       }
     
     // set state vector values
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
     
     double cf=0.1;
-    V[1][1]*=cf;
-    V[1][2]*=cf;
-    V[1][3]*=cf;
+    V[0][1]*=cf;
+    V[0][2]*=cf;
+    V[0][3]*=cf;
     
     // ... and for gradients
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)
         for(unsigned int i = 0; i < Nv; i++)
           G[k][j][i]=(*Gqp[k])[qp][i][j];
 
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++){
+    for(int k = 0; k <= 2+DIRK.stage; k++){
      G[k][n0][1]=0.0;  // velocity
      G[k][n0][2]=0.0;
      G[k][n0][3]=0.0;
@@ -113,12 +113,12 @@ namespace mhd
   {
     unsigned int c=0,d;
     // set state vector values
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
     
     // ... and for gradients
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+    for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)
         for(unsigned int i = 0; i < Nv; i++)
           G[k][j][i]=(*Gqp[k])[qp][i][j];
@@ -132,7 +132,7 @@ namespace mhd
     d=(c+1)%dim;
 
     double cf=0.1;
-    for(unsigned int k = 0; k < 2+DIRK.stage; k++){
+    for(int k = 0; k <= 2+DIRK.stage; k++){
       V[k][1+c]*=cf;  // mirror velocity
       V[k][4+d]*=cf;  // mirror B
     }

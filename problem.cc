@@ -105,20 +105,6 @@ namespace mhd
       linLevel=pars.prm.get_integer("Simple level");
       gausIntOrd=pars.prm.get_integer("Gauss int ord");
       intMethod=pars.prm.get_integer("Time integration");
-      switch(intMethod){
-        case 1:
-        case 2:
-        case 3:
-        case 4:
-        case 5:
-          timeStepInt=&MHDProblem::DIRKmethod;
-          mhdeq->setDIRKMethod(intMethod-1);
-          break;
-        default:
-          timeStepInt=&MHDProblem::CrankNicolson;
-          mhdeq->setCNMethod();
-          break;
-      }
     }
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Mesh refinement");
@@ -151,6 +137,21 @@ namespace mhd
     initial_values.setParameters(pars);
     
     mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
+    
+    switch(intMethod){
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+      case 5:
+        timeStepInt=&MHDProblem::DIRKmethod;
+        mhdeq->setDIRKMethod(intMethod-1);
+        break;
+      default:
+        timeStepInt=&MHDProblem::CrankNicolson;
+        mhdeq->setCNMethod();
+        break;
+    }
     
     DIRK = new LA::MPI::Vector[mhdeq->DIRK.maxStageAll];
   }
@@ -236,7 +237,7 @@ namespace mhd
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     lin_solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     old_solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-    if (intMethod==0)
+    if (intMethod>0)
       for(unsigned int i=0;i<mhdeq->DIRK.maxStageAll;i++)
         DIRK[i].reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     system_rhs.reinit(locally_owned_dofs, mpi_communicator);  // no ghosts
@@ -265,6 +266,7 @@ namespace mhd
     double *weights=mhdeq->getWeights();
     QGauss<dim>  quadrature_formula(FEO+gausIntOrd);
     QGauss<dim-1> face_quadrature_formula(FEO+gausIntOrd);
+    
     
 //     FEValues<dim> fes_values(fes, quadrature_formula,
 //                              update_values   | update_gradients);
@@ -305,6 +307,7 @@ namespace mhd
                                         std::vector<Tensor<1,dim> > (Nv));
     std::vector<Vector<double> >* pVecVec[5];
     std::vector<std::vector<Tensor<1,dim> > >* pVecTen[5];
+        
     pVecVec[0]=&old_sv;
     pVecVec[1]=&lin_sv;
     pVecVec[2]=&dirk1v;
@@ -316,7 +319,7 @@ namespace mhd
     pVecTen[2]=&dirk1g;
     pVecTen[3]=&dirk2g;
     pVecTen[4]=&dirk3g;
-    
+        
     std::vector<Vector<double> >  old_svf(n_f_q_points, Vector<double>(Nv));
     std::vector<Vector<double> >  lin_svf(n_f_q_points, Vector<double>(Nv));
     std::vector<Vector<double> >  dirk1vf(n_f_q_points, Vector<double>(Nv));
@@ -382,7 +385,7 @@ namespace mhd
         fe_values.get_function_gradients(old_solution, old_sg);
         fe_values.get_function_values(lin_solution, lin_sv);
         fe_values.get_function_gradients(lin_solution, lin_sg);
-        for(unsigned int i=0; i<=mhdeq->DIRK.stage; i++){
+        for(int i=0; i<=mhdeq->DIRK.stage; i++){
           fe_values.get_function_values(DIRK[i], *(pVecVec[2+i]));
           fe_values.get_function_gradients(DIRK[i], *(pVecTen[2+i]));
         }
@@ -422,13 +425,10 @@ namespace mhd
           // hand side vector.
           for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
             mhdeq->set_state_vector_for_qp(pVecVec,pVecTen, q_point);
-            
             mhdeq->setFEvals(fe_values, q_point);
+            pcout<<"bele0\n";
             mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
-            // TODO: calling right functions for C-N or DIRK schemes
-//             mhdeq->set_operator_matrixes(operator_matrixes);
-            // TODO: calling right functions for C-N or DIRK schemes
-//             mhdeq->set_rhs(cell_rhs_lin);
+            pcout<<"bele1\n";
             for(unsigned int i=0; i<stv2dof.Nstv; i++){
               for(unsigned int j=0; j<stv2dof.Nstv; j++){
                 for(unsigned int k=0; k<Nv; k++){
@@ -469,7 +469,7 @@ namespace mhd
                 fe_face_values.get_function_gradients(old_solution, old_sgf);
                 fe_face_values.get_function_values(lin_solution, lin_svf);
                 fe_face_values.get_function_gradients(lin_solution, lin_sgf);
-                for(unsigned int i=0; i<=mhdeq->DIRK.stage; i++){
+                for(int i=0; i<=mhdeq->DIRK.stage; i++){
                   fe_values.get_function_values(DIRK[i], *(pVecVecf[2+i]));
                   fe_values.get_function_gradients(DIRK[i], *(pVecTenf[2+i]));
                 }
@@ -717,7 +717,7 @@ namespace mhd
     lin_solution=old_solution;
     iter=sitr=0;
     for(;;){ // linearization
-      assemble_system(0);
+      assemble_system(iter);
       sitr += solve();
       corrections();
       system_rhs=lin_solution;
@@ -734,7 +734,7 @@ namespace mhd
   void MHDProblem<dim>::DIRKmethod(unsigned int &iter, unsigned int &sitr)
   {
     lin_solution=old_solution;
-    for(unsigned int i=0;i<mhdeq->DIRK.maxStage;i++){
+    for(int i=0;i<mhdeq->DIRK.maxStage;i++){
       mhdeq->setDIRKStage(i);
       iter=sitr=0;
       for(;;){ // linearization

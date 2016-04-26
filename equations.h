@@ -47,9 +47,9 @@ namespace mhd
       const unsigned int orders[5]={2,2,3,3,4};
       const unsigned int stages[5]={1,2,2,3,3};
       const unsigned int maxStageAll=3;
-      unsigned int maxStage;
-      unsigned int stage;
-      unsigned int method;
+      int maxStage;
+      int stage;
+      int method;
     }DIRK;
     
     void setDIRKMethod(unsigned int);
