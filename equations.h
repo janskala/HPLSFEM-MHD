@@ -41,22 +41,33 @@ namespace mhd
     MHDequations(Params&, mapDoFs&, MPI_Comm);
     ~MHDequations();
     
-    void set_state_vector_for_qp(std::vector<Vector<double> >&,
-                        std::vector<std::vector<Tensor<1,dim> > >&,
-                        std::vector<Vector<double> > &,
-                        std::vector<std::vector<Tensor<1,dim> > >&,
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
+    struct{
+      double ab[5][4][3];
+      double tau[5][3];
+      const unsigned int orders[5]={2,2,3,3,4};
+      const unsigned int stages[5]={1,2,2,3,3};
+      const unsigned int maxStageAll=3;
+      unsigned int maxStage;
+      unsigned int stage;
+      unsigned int method;
+    }DIRK;
+    
+    void setDIRKMethod(unsigned int);
+    void setDIRKStage(unsigned int);
+    void setCNMethod();
+    
+    void set_state_vector_for_qp(std::vector<Vector<double> >**,
+                        std::vector<std::vector<Tensor<1,dim> > >**,
                         const unsigned int);
-    void setFEvals(const FEValues<dim>&,
-                    const unsigned int,
-                    const unsigned int);
-    void setFEvals(const FEFaceValues<dim>&,
-                    const unsigned int,
-                    const unsigned int);
-    void set_operator_matrixes(FullMatrix<double> *,
-                            const unsigned int);
-    void set_rhs(Vector<double>&);
+    void setFEvals(const FEValues<dim>&, const unsigned int);
+    void setFEvals(const FEFaceValues<dim>&, const unsigned int);
+    
+    void calucate_matrix_rhs(FullMatrix<double> *, Vector<double>&);
+    void set_operators_full(FullMatrix<double> *);
+    void set_operators_diag(FullMatrix<double> *);
+    void set_rhs_CN(Vector<double>&);
+    void set_rhs_DIRK(Vector<double>&);
+    
     void JacobiM(double v[]);
     void dxA(double v[], double dv[][Nv]);
 //     void fluxes(double v[]);
@@ -73,61 +84,39 @@ namespace mhd
 //     void setEtaConst(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaVD(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaJ(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
-    double setEtaConst();
-    double setEtaVD();
-    double setEtaJ();
+    double setEtaConst(int);
+    double setEtaVD(int);
+    double setEtaJ(int);
     
 //     typedef void (MHDequations::*p2setEta)(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
-    typedef double (MHDequations::*p2setEta)();
-    p2setEta setEta;
     
-    typedef void (MHDequations::*p2BC)(std::vector<Vector<double> >&,  // lin values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // lin gradients
-                        std::vector<Vector<double> > &,  // old values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // old gradients
+    typedef void (MHDequations::*p2BC)(std::vector<Vector<double> >*[],
+                        std::vector<std::vector<Tensor<1,dim> > >*[],
                         std::vector<Vector<double> >&, // initial values
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
                         const Tensor<1,dim>&,  // normal
                         const unsigned int); // qp
     p2BC        BCp[4];
-    void constantBC(std::vector<Vector<double> >&,  // lin values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // lin gradients
-                        std::vector<Vector<double> > &,  // old values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // old gradients
-                        std::vector<Vector<double> >&, // initial values
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
-                        const Tensor<1,dim>&,  // normal
-                        const unsigned int); // qp
-    void freeBC(std::vector<Vector<double> >&,  // lin values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // lin gradients
-                        std::vector<Vector<double> > &,  // old values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // old gradients
-                        std::vector<Vector<double> >&, // initial values
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
-                        const Tensor<1,dim>&,  // normal
-                        const unsigned int); // qp
-    void noFlowBC(std::vector<Vector<double> >&,  // lin values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // lin gradients
-                        std::vector<Vector<double> > &,  // old values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // old gradients
-                        std::vector<Vector<double> >&, // initial values
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
-                        const Tensor<1,dim>&,  // normal
-                        const unsigned int); // qp
-    void mirrorBC(std::vector<Vector<double> >&,  // lin values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // lin gradients
-                        std::vector<Vector<double> > &,  // old values
-                        std::vector<std::vector<Tensor<1,dim> > >&, // old gradients
-                        std::vector<Vector<double> >&, // initial values
-//                         std::vector<double > &,  // eta values
-//                         std::vector<Tensor<1,dim> >&, // eta gradients
-                        const Tensor<1,dim>&,  // normal
-                        const unsigned int); // qp
-    
+    void constantBC(std::vector<Vector<double> >*[],
+                    std::vector<std::vector<Tensor<1,dim> > >*[],
+                    std::vector<Vector<double> >&, // initial values
+                    const Tensor<1,dim>&,  // normal
+                    const unsigned int); // qp
+    void freeBC(std::vector<Vector<double> >*[],
+                std::vector<std::vector<Tensor<1,dim> > >*[],
+                std::vector<Vector<double> >&, // initial values
+                const Tensor<1,dim>&,  // normal
+                const unsigned int); // qp
+    void noFlowBC(std::vector<Vector<double> >*[],
+                  std::vector<std::vector<Tensor<1,dim> > >*[],
+                  std::vector<Vector<double> >&, // initial values
+                  const Tensor<1,dim>&,  // normal
+                  const unsigned int); // qp
+    void mirrorBC(std::vector<Vector<double> >*[],
+                  std::vector<std::vector<Tensor<1,dim> > >*[],
+                  std::vector<Vector<double> >&, // initial values
+                  const Tensor<1,dim>&,  // normal
+                  const unsigned int); // qp
+  
     void reinitFEval();
     
     // RHS of MHD equations
@@ -149,10 +138,8 @@ namespace mhd
     
     double               A[3][Ne][Nv];
     double               B[Ne][Nv];
-//     double               F[3][Ne];
-//     double               Flx[3][Ne];
-    double               vl[Nv],vo[Nv];
-    double               dvx[3][Nv],dox[3][Nv];
+    double               V[2+3][Nv];
+    double               G[2+3][3][Nv];
     double               *fev[Nv],*feg[3][Nv];
     double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0,1e-0, 1e0,1e0};
     
@@ -170,8 +157,17 @@ namespace mhd
     double        hmin;
     
     bool          NRLin;               // Newton-Raphson linearization will be used
+    bool          NRLinBck;            // Used in DIRK for backup NRLin in last part of DIRK
     
     mapDoFs&      stv2dof;
+    
+    typedef void (MHDequations::*p2clcMat)(FullMatrix<double> *);
+    p2clcMat clcMat;
+    typedef void (MHDequations::*p2clcRhs)(Vector<double>&);
+    p2clcRhs clcRhs;
+    
+    typedef double (MHDequations::*p2setEta)(int);
+    p2setEta setEta;
   };
   
   //template class MHDequations<1>;  // create code for 1D to be able link it....

@@ -1,4 +1,5 @@
 #include "params.h"
+#include <deal.II/base/utilities.h>
 
 namespace mhd
 {
@@ -20,8 +21,10 @@ namespace mhd
         "values(you can cut and paste this and use it for your own parameter\n"
         "file):\n"
         "\n";
-    std::cout << message;
-    prm.print_parameters(std::cout, ParameterHandler::Text);
+    if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0){
+      std::cout << message;
+      prm.print_parameters(std::cout, ParameterHandler::Text);
+    }
   }
   
   
@@ -63,6 +66,10 @@ namespace mhd
 
     prm.enter_subsection("Numerics");
     {
+      prm.declare_entry("Time integration", "0",
+                         Patterns::Integer(0,5),
+                         "Time integration method: 0 - Crank-Nicolson, 1 - DIRK(1,2),"
+                         "2 - DIRK(2,2), 3 - DIRK(2,3), 4 - DIRK(3,3), 5 - DIRK(3,4)");
       prm.declare_entry("theta", "0.6",
                          Patterns::Double(0.0,1.0),
                          "Coeficient from theta scheme - sets implicit/explicit formulation.");
@@ -85,6 +92,10 @@ namespace mhd
                          Patterns::Integer(0,100),
                          "From this refinement level Newton-Rapson linearization is used."
                          "Otherwise, a simple linearization method is used.");
+      prm.declare_entry("Gauss int ord", "1",
+                         Patterns::Integer(0,100),
+                         "Gaussian quadrature formula use (aprox deg) + (Gauss int ord)"
+                         "order for integration.");
       prm.enter_subsection("LS weights");
       {
         prm.declare_entry("rho", "1.0", Patterns::Double(0,9e99), "Density.");

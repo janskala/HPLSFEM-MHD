@@ -97,6 +97,73 @@ namespace mhd
       for(unsigned int d=0;d<3;d++)
         feg[d][i] = new double[0];
     }
+    
+    
+    for(unsigned int i=0;i<5;i++)
+      for(unsigned int j=0;j<DIRK.maxStageAll;j++){
+        DIRK.tau[i][j]=0.0;
+        for(unsigned int k=0;k<DIRK.maxStageAll+1;k++)
+          DIRK.ab[i][k][j]=0.0;
+    }
+    // DIRK(1,2)
+    DIRK.ab[0][0][0]=0.5;
+    DIRK.ab[0][1][0]=1.0;
+    DIRK.tau[0][0]=0.5;
+    
+    // DIRK(2,2)
+    double alp=1.0-0.5*std::sqrt(2.0);
+    DIRK.ab[1][0][0]=alp;
+    DIRK.ab[1][1][0]=1.0-alp;
+    DIRK.ab[1][1][1]=alp;
+    DIRK.ab[1][2][0]=1.0-alp;
+    DIRK.ab[1][2][1]=alp;
+    DIRK.tau[1][0]=alp;
+    DIRK.tau[1][1]=1.0;
+    
+    // DIRK(2,3)
+    alp=1.0/(2.0*std::sqrt(3.0));
+    DIRK.ab[2][0][0]=0.5+alp;
+    DIRK.ab[2][1][0]=-2.0*alp;
+    DIRK.ab[2][1][1]=0.5+alp;
+    DIRK.ab[2][2][0]=0.5;
+    DIRK.ab[2][2][1]=0.5;
+    DIRK.tau[2][0]=0.5+alp;
+    DIRK.tau[2][1]=0.5-alp;
+    
+    // DIRK(3,3)
+    alp=0.5;  // or 1/6
+    double t2=(1.0+alp)*0.5;
+    double b1=-(6.0*alp*alp-16.0*alp+1.0)*0.25;
+    double b2=(6.0*alp*alp-20.0*alp+5.0)*0.25;
+    DIRK.ab[3][0][0]=alp;
+    DIRK.ab[3][1][0]=t2-alp;
+    DIRK.ab[3][1][1]=alp;
+    DIRK.ab[3][2][0]=b1;
+    DIRK.ab[3][2][1]=b2;
+    DIRK.ab[3][2][2]=alp;
+    DIRK.ab[3][3][0]=b1;
+    DIRK.ab[3][3][1]=b2;
+    DIRK.ab[3][3][2]=alp;
+    DIRK.tau[3][0]=alp;
+    DIRK.tau[3][1]=t2;
+    DIRK.tau[3][2]=1.0;
+    
+    // DIRK(3,4)
+    alp=2.0*std::cos(2.0*std::asin(1.0)/18.0);
+    t2=(1.0+alp)*0.5;
+    b1=(1.0+alp);
+    DIRK.ab[4][0][0]=t2;
+    DIRK.ab[4][1][0]=-alp*0.5;
+    DIRK.ab[4][1][1]=t2;
+    DIRK.ab[4][2][0]=b1;
+    DIRK.ab[4][2][1]=-(1.0+2.0*alp);
+    DIRK.ab[4][2][2]=t2;
+    DIRK.ab[4][3][0]=1.0/(6.0*alp*alp);
+    DIRK.ab[4][3][1]=1.0-1.0/(3.0*alp*alp);
+    DIRK.ab[4][3][2]=1.0/(6.0*alp*alp);
+    DIRK.tau[4][0]=t2;
+    DIRK.tau[4][1]=0.5;
+    DIRK.tau[4][2]=0.5*(1.0-alp);
   }
   
   template <int dim>
@@ -144,8 +211,44 @@ namespace mhd
   }
   
   template <int dim>
+  void MHDequations<dim>::setCNMethod()
+  {
+    clcMat=&MHDequations::set_operators_full;
+    clcRhs=&MHDequations::set_rhs_CN;
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::setDIRKMethod(unsigned int m)
+  {
+    DIRK.method=m;
+    DIRK.maxStage=DIRK.stages[m];
+    DIRK.stage=0;
+    clcMat=&MHDequations::set_operators_full;
+    clcRhs=&MHDequations::set_rhs_DIRK;
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::setDIRKStage(unsigned int s)
+  {
+    if (s>=DIRK.stages[DIRK.method]){
+      DIRK.stage=DIRK.stages[DIRK.method]-1;
+      theta=1.0;
+      NRLinBck=NRLin;
+      NRLin=false;    // In the last step we have pure explicit evaluation
+      // set evaluation functions
+      clcMat=&MHDequations::set_operators_diag;
+    }else{
+      DIRK.stage=s;
+      theta=DIRK.ab[DIRK.method][s][s]*DIRK.tau[DIRK.method][s];
+      if (s==0){  // set evaluation functions
+        clcMat=&MHDequations::set_operators_full;
+        NRLin=NRLinBck;
+      }
+    }
+  }
+  
+  template <int dim>
   void MHDequations<dim>::setFEvals(const FEFaceValues<dim> &fv,
-                                    const unsigned int /*dofs*/,
                                     const unsigned int qp)
   {
     for(unsigned int i=0;i<stv2dof.Nstv;i++)   // over the state vectors
@@ -167,7 +270,6 @@ namespace mhd
   
   template <int dim>
   void MHDequations<dim>::setFEvals(const FEValues<dim> &fv,
-                                    const unsigned int /*dofs*/,
                                     const unsigned int qp)
   {
     for(unsigned int i=0;i<stv2dof.Nstv;i++)   // over the state vectors
@@ -186,62 +288,60 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDequations<dim>::set_state_vector_for_qp(std::vector<Vector<double> > &lvq,
-                        std::vector<std::vector<Tensor<1,dim> > > &lgq,
-                        std::vector<Vector<double> > &ovq,
-                        std::vector<std::vector<Tensor<1,dim> > > &ogq,
-//                         std::vector<double > &eta,  // eta values
-//                         std::vector<Tensor<1,dim> > &etag, // eta gradients
+  void MHDequations<dim>::set_state_vector_for_qp(std::vector<Vector<double> >* Vqp[],
+                        std::vector<std::vector<Tensor<1,dim> > >* Gqp[],
                         const unsigned int qp)
   {
     // set state vector values
-    for (unsigned int i = 0; i < Nv; i++){
-      vl[i] = lvq[qp](i);
-      vo[i] = ovq[qp](i);
-    }
+    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+      for (unsigned int i = 0; i < Nv; i++)
+        V[k][i] = (*Vqp[k])[qp](i);
+    
     // ... and for gradients
-    for(unsigned int j = 0; j < dim; j++)
-      for(unsigned int i = 0; i < Nv; i++){
-        dvx[j][i]=lgq[qp][i][j];
-        dox[j][i]=ogq[qp][i][j];
-      }
-//     ETA=eta[qp];
-//     for(unsigned int j = 0; j < dim; j++)
-//       ETAg[j]=etag[qp][j];
+    for(unsigned int k = 0; k < 2+DIRK.stage; k++)
+      for(unsigned int j = 0; j < dim; j++)
+        for(unsigned int i = 0; i < Nv; i++)
+          G[k][j][i]=(*Gqp[k])[qp][i][j];
 
     // checking underflow of density and pressure
     const double pc=1e-4/(GAMMA-1.0),rhc=1e-1;
-    if (vl[0]<rhc){  // check density
-      vl[0]=rhc;
+    if (V[0][0]<rhc){  // check density
+      V[0][0]=rhc;
     }
-    if (vo[0]<rhc){
-      vo[0]=rhc;
+    if (V[1][0]<rhc){
+      V[1][0]=rhc;
     }
     
     // check pressure
     double Uk,Um,buf;
-    Uk=(vl[1]*vl[1]+vl[2]*vl[2]+vl[3]*vl[3])/(vl[0]);
-    Um=vl[4]*vl[4]+vl[5]*vl[5]+vl[6]*vl[6];
+    Uk=(V[0][1]*V[0][1]+V[0][2]*V[0][2]+V[0][3]*V[0][3])/(V[0][0]);
+    Um=V[0][4]*V[0][4]+V[0][5]*V[0][5]+V[0][6]*V[0][6];
     buf=Um+Uk;
-    if ((vl[7]-buf)<pc){
-      vl[7]=buf+pc;
+    if ((V[0][7]-buf)<pc){
+      V[0][7]=buf+pc;
     }
-    Uk=(vo[1]*vo[1]+vo[2]*vo[2]+vo[3]*vo[3])/(vo[0]);
-    Um=vo[4]*vo[4]+vo[5]*vo[5]+vo[6]*vo[6];
+    Uk=(V[1][1]*V[1][1]+V[1][2]*V[1][2]+V[1][3]*V[1][3])/(V[1][0]);
+    Um=V[1][4]*V[1][4]+V[1][5]*V[1][5]+V[1][6]*V[1][6];
     buf=Um+Uk;
-    if ((vo[7]-buf)<pc){
-      vo[7]=buf+pc;
+    if ((V[1][7]-buf)<pc){
+      V[1][7]=buf+pc;
     }
     
     checkDt();
   }
   
   template <int dim>
-  void MHDequations<dim>::set_operator_matrixes(FullMatrix<double> *O,
-                                      const unsigned int /*dofs*/)
+  void MHDequations<dim>::calucate_matrix_rhs(FullMatrix<double> *O, Vector<double> &F)
   {
-    JacobiM(vl);
-    if (NRLin) dxA(vl,dvx);
+    (this->*clcMat)(O);
+    (this->*clcRhs)(F);
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::set_operators_full(FullMatrix<double> *O)
+  {
+    JacobiM(V[0]);
+    if (NRLin) dxA(V[0],G[0]);
     
     for(unsigned int i=0;i<stv2dof.Nstv;i++){
       double thdt=theta*dt;
@@ -282,16 +382,35 @@ namespace mhd
       }
     }
   }
+  
+  template <int dim>
+  void MHDequations<dim>::set_operators_diag(FullMatrix<double> *O)
+  {
+    for(unsigned int i=0;i<stv2dof.Nstv;i++){
+
+      for(unsigned int k=0;k<Ne;k++)
+        for(unsigned int l=0;l<Nv;l++)
+          O[i](k,l)=0.0;
+      // diagonal part 1
+      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i];
+      for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=fev[l][i];
+
+      for(unsigned int d=0;d<dim;d++)
+        for(unsigned int k=Nt;k<Ne;k++)  // time independent part
+          for(unsigned int l=0;l<Nv;l++)
+            O[i](k,l)+=A[d][k][l]*dt*feg[d][l][i];
+    }
+  }
 
   template <int dim>
-  void MHDequations<dim>::set_rhs(Vector<double> &F)
+  void MHDequations<dim>::set_rhs_CN(Vector<double> &F)
   {
     double sum[Nt],sum2[Nt],dtth,dtoth;
     
-    JacobiM(vo);
+    JacobiM(V[1]);
     
     for(unsigned int k=0;k<Nt;k++){
-      F[k]=vo[k];
+      F[k]=V[1][k];
       sum[k]=sum2[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
@@ -299,12 +418,12 @@ namespace mhd
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum2[k]+=B[k][l]*vl[l];
+          sum2[k]+=B[k][l]*V[0][l];
     
     for(unsigned int d=0;d<dim;d++)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum[k]+=A[d][k][l]*dox[d][l];
+          sum[k]+=A[d][k][l]*G[1][d][l];
       
     dtth=-dt*theta;
     dtoth=dt*(1.0-theta);
@@ -312,20 +431,50 @@ namespace mhd
       F[k]-=dtoth*sum[k]+dtth*sum2[k];
     
     // add gravity terms
-    F[1]+=gravity[0]*vo[0]*dtoth;
-    F[2]+=gravity[1]*vo[0]*dtoth;
-    F[3]+=gravity[2]*vo[0]*dtoth;
-    F[7]+=dtoth*(gravity[0]*vo[1]+gravity[1]*vo[2]+gravity[2]*vo[3]);
+    F[1]+=gravity[0]*V[1][0]*dtoth;
+    F[2]+=gravity[1]*V[1][0]*dtoth;
+    F[3]+=gravity[2]*V[1][0]*dtoth;
+    F[7]+=dtoth*(gravity[0]*V[1][1]+gravity[1]*V[1][2]+gravity[2]*V[1][3]);
+
+    F[11]=dt*(this->*setEta)(1);  // calculate it from old time values
+  }
+  
+    template <int dim>
+  void MHDequations<dim>::set_rhs_DIRK(Vector<double> &F)
+  {
+    double sum[Nt],dtth;
+
+    for(unsigned int k=0;k<Nt;k++){
+      F[k]=V[1][k];
+      sum[k]=0.0;
+    }
+    for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
+      
+    if (NRLin)
+      for(unsigned int k=0;k<Nt;k++)
+        for(unsigned int l=0;l<Nv;l++)
+          sum[k]+=B[k][l]*V[0][l];
     
-    // terms with eta derivative
-//     F[4]+=dtth*(vl[10]*ETAg[1]-vl[9]*ETAg[2])-dtoth*(vo[10]*ETAg[1]-vo[9]*ETAg[2]);
-//     F[5]+=dtth*(-vl[10]*ETAg[0]+vl[8]*ETAg[2])-dtoth*(-vo[10]*ETAg[0]+vo[8]*ETAg[2]);
-//     F[6]+=dtth*(vl[9]*ETAg[0]-vl[8]*ETAg[1])-dtoth*(vo[9]*ETAg[0]-vo[8]*ETAg[1]);
-//     F[7]+=2*dtth*(ETAg[0]*(vl[6]*vl[9]-vl[5]*vl[10])+ETAg[1]*(vl[4]*vl[10]-vl[6]*vl[8])+
-//                   ETAg[2]*(vl[5]*vl[8]-vl[4]*vl[9]))-2*dtoth*(
-//                   ETAg[0]*(vo[6]*vo[9]-vo[5]*vo[10])+ETAg[1]*(vo[4]*vo[10]-vo[6]*vo[8])+
-//                   ETAg[2]*(vo[5]*vo[8]-vo[4]*vo[9]));
-    F[11]=dt*(this->*setEta)();
+    dtth=-dt*theta;
+    for(unsigned int k=0;k<Nt;k++)
+      F[k]-=dtth*sum[k];
+
+    F[11]=dt*(this->*setEta)(1);
+    
+    for(unsigned int l=0;DIRK.stages[DIRK.stage]-1;l++){
+      int lStage=1+DIRK.stage;
+      JacobiM(V[lStage]);
+      
+      for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
+        
+      for(unsigned int d=0;d<dim;d++)
+        for(unsigned int k=0;k<Nt;k++)
+          for(unsigned int l=0;l<Nv;l++)
+            sum[k]+=A[d][k][l]*G[lStage][d][l];
+          
+      for(unsigned int k=0;k<Nt;k++)
+        F[k]-=dt*DIRK.ab[DIRK.method][DIRK.stage][l]*sum[k];
+    }
   }
   
   template <int dim>
@@ -375,6 +524,7 @@ namespace mhd
     overflow=Utilities::MPI::max(overflow,mpi_communicator);
     v.compress(VectorOperation::insert);  // write changes in parallel vector
     return overflow!=0;*/
+    return false;
   }
   
   template <int dim>
@@ -427,30 +577,30 @@ namespace mhd
     newdt=1e99;
     vmax=0.0;
     
-    iRh=1.0/vl[0];
+    iRh=1.0/V[0][0];
     iRh2=iRh*iRh;
-    B2=vl[4]*vl[4]+vl[5]*vl[5]+vl[6]*vl[6];
-    buf=(vl[1]*vl[1]+vl[2]*vl[2]+vl[3]*vl[3])*iRh+B2;
+    B2=V[0][4]*V[0][4]+V[0][5]*V[0][5]+V[0][6]*V[0][6];
+    buf=(V[0][1]*V[0][1]+V[0][2]*V[0][2]+V[0][3]*V[0][3])*iRh+B2;
     
-    p=GAMMA*(GAMMA-1.0)*(vl[7]-buf); // gamma*p
+    p=GAMMA*(GAMMA-1.0)*(V[0][7]-buf); // gamma*p
     a=(p+B2)*iRh;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*vl[4]*vl[4]*iRh2)));
-    if (vl[1]>0.0) vlc=vl[1]*iRh+cf;
-    else vlc=vl[1]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][4]*V[0][4]*iRh2)));
+    if (V[0][1]>0.0) vlc=V[0][1]*iRh+cf;
+    else vlc=V[0][1]*iRh-cf;
     buf=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*vl[5]*vl[5]*iRh2)));
-    if (vl[2]>0.0) vlc=vl[2]*iRh+cf;
-    else vlc=vl[2]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][5]*V[0][5]*iRh2)));
+    if (V[0][2]>0.0) vlc=V[0][2]*iRh+cf;
+    else vlc=V[0][2]*iRh-cf;
     buf+=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*vl[6]*vl[6]*iRh2)));
-    if (vl[3]>0.0) vlc=vl[3]*iRh+cf;
-    else vlc=vl[3]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[0][6]*V[0][6]*iRh2)));
+    if (V[0][3]>0.0) vlc=V[0][3]*iRh+cf;
+    else vlc=V[0][3]*iRh-cf;
     buf+=vlc*vlc;
     
     vlc=sqrt(buf); // fast magnetoacustic wave speed
     buf = CFL*hmin/vlc;
     if (buf<newdt) newdt = buf;  // use minimum dt
-    buf = CFL*hmin*hmin/(2.0*ETAmax);
+    buf = CFL*hmin*hmin/(8.0*ETAmax);
     if (buf<newdt) newdt = buf;  // use minimum dt for resistivity
     if (vlc>vmax) vmax=vlc;
 

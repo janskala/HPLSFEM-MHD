@@ -76,6 +76,7 @@ namespace mhd
     dof_handler.clear();
     //dof_handler_s.clear();
     delete [] operator_matrixes;
+    delete [] DIRK;
     delete mhdeq;
   }
   
@@ -102,6 +103,22 @@ namespace mhd
       linmaxIt=pars.prm.get_integer("Number of linearizations");
       linPrec=pars.prm.get_double("Linearization tolerance");
       linLevel=pars.prm.get_integer("Simple level");
+      gausIntOrd=pars.prm.get_integer("Gauss int ord");
+      intMethod=pars.prm.get_integer("Time integration");
+      switch(intMethod){
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+          timeStepInt=&MHDProblem::DIRKmethod;
+          mhdeq->setDIRKMethod(intMethod-1);
+          break;
+        default:
+          timeStepInt=&MHDProblem::CrankNicolson;
+          mhdeq->setCNMethod();
+          break;
+      }
     }
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Mesh refinement");
@@ -134,13 +151,15 @@ namespace mhd
     initial_values.setParameters(pars);
     
     mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
+    
+    DIRK = new LA::MPI::Vector[mhdeq->DIRK.maxStageAll];
   }
   
   template <int dim>
   void MHDProblem<dim>::setDofMapping()
   {
     // Set mapping from dof to system component and vice versa
-    QGauss<dim> quadrature(FEO+1);
+    QGauss<dim> quadrature(FEO+gausIntOrd);
     double intFEval;
     FEValues<dim> fe_values(fe, quadrature, update_values | update_quadrature_points);
     fe_values.reinit(dof_handler.begin_active());
@@ -217,6 +236,9 @@ namespace mhd
     solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     lin_solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     old_solution.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+    if (intMethod==0)
+      for(unsigned int i=0;i<mhdeq->DIRK.maxStageAll;i++)
+        DIRK[i].reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     system_rhs.reinit(locally_owned_dofs, mpi_communicator);  // no ghosts
     residue.reinit(locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     distributed_solution.reinit(locally_owned_dofs, mpi_communicator);  // for solver - no ghosts
@@ -241,8 +263,8 @@ namespace mhd
     TimerOutput::Scope t(computing_timer, "assembly");
 #endif
     double *weights=mhdeq->getWeights();
-    QGauss<dim>  quadrature_formula(FEO+2);
-    QGauss<dim-1> face_quadrature_formula(FEO+2);
+    QGauss<dim>  quadrature_formula(FEO+gausIntOrd);
+    QGauss<dim-1> face_quadrature_formula(FEO+gausIntOrd);
     
 //     FEValues<dim> fes_values(fes, quadrature_formula,
 //                              update_values   | update_gradients);
@@ -266,23 +288,71 @@ namespace mhd
     Vector<double>       cell_rhs(dofs_per_cell);
 
     std::vector<Vector<double> >  old_sv(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  lin_sv(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk1v(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk2v(n_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk3v(n_q_points, Vector<double>(Nv));
+    
     std::vector<std::vector<Tensor<1,dim> > >  old_sg(n_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
-    std::vector<Vector<double> >   lin_sv(n_q_points, Vector<double>(Nv));
     std::vector<std::vector<Tensor<1,dim> > >  lin_sg(n_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk1g(n_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk2g(n_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk3g(n_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<Vector<double> >* pVecVec[5];
+    std::vector<std::vector<Tensor<1,dim> > >* pVecTen[5];
+    pVecVec[0]=&old_sv;
+    pVecVec[1]=&lin_sv;
+    pVecVec[2]=&dirk1v;
+    pVecVec[3]=&dirk2v;
+    pVecVec[4]=&dirk3v;
+    
+    pVecTen[0]=&old_sg;
+    pVecTen[1]=&lin_sg;
+    pVecTen[2]=&dirk1g;
+    pVecTen[3]=&dirk2g;
+    pVecTen[4]=&dirk3g;
+    
     std::vector<Vector<double> >  old_svf(n_f_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  lin_svf(n_f_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk1vf(n_f_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk2vf(n_f_q_points, Vector<double>(Nv));
+    std::vector<Vector<double> >  dirk3vf(n_f_q_points, Vector<double>(Nv));
+    
     std::vector<std::vector<Tensor<1,dim> > >  old_sgf(n_f_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
-    std::vector<Vector<double> >   lin_svf(n_f_q_points, Vector<double>(Nv));
     std::vector<std::vector<Tensor<1,dim> > >  lin_sgf(n_f_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
-    std::vector<Vector<double> >  cell_residue(n_q_points, Vector<double>(Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk1gf(n_f_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk2gf(n_f_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<std::vector<Tensor<1,dim> > >  dirk3gf(n_f_q_points,
+                                        std::vector<Tensor<1,dim> > (Nv));
+    std::vector<Vector<double> >* pVecVecf[5];
+    std::vector<std::vector<Tensor<1,dim> > >* pVecTenf[5];
+    pVecVecf[0]=&old_svf;
+    pVecVecf[1]=&lin_svf;
+    pVecVecf[2]=&dirk1vf;
+    pVecVecf[3]=&dirk2vf;
+    pVecVecf[4]=&dirk3vf;
     
-    std::vector<double>  eta_v(n_q_points);
-    std::vector<Tensor<1,dim> >  eta_g(n_q_points);
-    std::vector<double>  eta_vf(n_f_q_points);
-    std::vector<Tensor<1,dim> >  eta_gf(n_f_q_points);
+    pVecTenf[0]=&old_sgf;
+    pVecTenf[1]=&lin_sgf;
+    pVecTenf[2]=&dirk1gf;
+    pVecTenf[3]=&dirk2gf;
+    pVecTenf[4]=&dirk3gf;
+    
+//     std::vector<Vector<double> >  cell_residue(n_q_points, Vector<double>(Nv));
+    
+//     std::vector<double>  eta_v(n_q_points);
+//     std::vector<Tensor<1,dim> >  eta_g(n_q_points);
+//     std::vector<double>  eta_vf(n_f_q_points);
+//     std::vector<Tensor<1,dim> >  eta_gf(n_f_q_points);
 
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
@@ -312,6 +382,10 @@ namespace mhd
         fe_values.get_function_gradients(old_solution, old_sg);
         fe_values.get_function_values(lin_solution, lin_sv);
         fe_values.get_function_gradients(lin_solution, lin_sg);
+        for(unsigned int i=0; i<=mhdeq->DIRK.stage; i++){
+          fe_values.get_function_values(DIRK[i], *(pVecVec[2+i]));
+          fe_values.get_function_gradients(DIRK[i], *(pVecTen[2+i]));
+        }
 //         fe_values.get_function_values(residue, cell_residue);
 //         fes_values.get_function_values(eta, eta_v);
 //         fes_values.get_function_gradients(eta, eta_g);
@@ -347,14 +421,14 @@ namespace mhd
           // Then assemble the entries of the local stiffness matrix and right
           // hand side vector.
           for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
+            mhdeq->set_state_vector_for_qp(pVecVec,pVecTen, q_point);
             
-            mhdeq->set_state_vector_for_qp(lin_sv, lin_sg, old_sv, old_sg, q_point);
-            
-            mhdeq->setFEvals(fe_values,dofs_per_cell,q_point);
-            
-            mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
-            
-            mhdeq->set_rhs(cell_rhs_lin);
+            mhdeq->setFEvals(fe_values, q_point);
+            mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
+            // TODO: calling right functions for C-N or DIRK schemes
+//             mhdeq->set_operator_matrixes(operator_matrixes);
+            // TODO: calling right functions for C-N or DIRK schemes
+//             mhdeq->set_rhs(cell_rhs_lin);
             for(unsigned int i=0; i<stv2dof.Nstv; i++){
               for(unsigned int j=0; j<stv2dof.Nstv; j++){
                 for(unsigned int k=0; k<Nv; k++){
@@ -395,6 +469,10 @@ namespace mhd
                 fe_face_values.get_function_gradients(old_solution, old_sgf);
                 fe_face_values.get_function_values(lin_solution, lin_svf);
                 fe_face_values.get_function_gradients(lin_solution, lin_sgf);
+                for(unsigned int i=0; i<=mhdeq->DIRK.stage; i++){
+                  fe_values.get_function_values(DIRK[i], *(pVecVecf[2+i]));
+                  fe_values.get_function_gradients(DIRK[i], *(pVecTenf[2+i]));
+                }
                 //std::cout<<"here 0\n";
 //                 fes_face_values.get_function_values(eta, eta_vf);
 //                 fes_face_values.get_function_gradients(eta, eta_gf);
@@ -405,22 +483,22 @@ namespace mhd
                                             init_values);
                 
                 for(unsigned int q_point=0; q_point<n_f_q_points; ++q_point){
-                  mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point); // call it before BC
+                  mhdeq->setFEvals(fe_face_values,q_point); // call it before BC
                   
                   // get pointer to function which setup BC for given type defined in params
                   int bi = cell->face(face_number)->boundary_id();
-                  
                   const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
                   // call BC function and setup state vectors
                   (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
-                              lin_svf, lin_sgf, old_svf, old_sgf, init_values,
+                              pVecVecf,pVecTenf, init_values,
                               nrm, q_point);
                   
-                  mhdeq->setFEvals(fe_face_values,dofs_per_cell,q_point);
-                  
-                  mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
+                  mhdeq->setFEvals(fe_face_values,q_point);
+                  mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
+                  // TODO: calling right functions for C-N or DIRK schemes
+//                   mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
             
-                  mhdeq->set_rhs(cell_rhs_lin);
+//                   mhdeq->set_rhs(cell_rhs_lin);
                   for(unsigned int i=0; i<stv2dof.Nstv; i++){ // unfortunately we have to go all over the dofs_per_cell
                     for(unsigned int j=0; j<stv2dof.Nstv; j++){ //   dofs_per_face does not cointain proper basis fce
                       for(unsigned int k=0; k<Nv; k++){
@@ -505,7 +583,7 @@ namespace mhd
     unsigned int sitr,output_counter=0;
     unsigned int time_step=0;
     unsigned int iter,linReset;
-    double lastErr,err;
+//     double lastErr,err;
     //bool overflow=false;
     double sz[dim],maxSiz=0.0;
     std::vector<unsigned int> rep(dim);
@@ -559,8 +637,9 @@ namespace mhd
 
         lin_solution=old_solution;
 // 	residue=9e99;
-        lastErr=9e99;
-        linReset=iter=sitr=0;
+        //lastErr=9e99;
+        //linReset=iter=sitr=0;
+        /*
         for(;;){ // linearization - do one time step
             assemble_system(iter);
             sitr += solve();
@@ -596,6 +675,8 @@ namespace mhd
 //                  << " res: "<<err<<
 //                  " vmax="<<mhdeq->getVmax()<<" "<<overflow<<std::endl;
         }
+        */
+        (this->*timeStepInt)(iter,sitr);
         //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
         //mhdeq->checkDt(solution);
         if (time_step%1==0) pcout << "l. it.: " << iter << 
@@ -629,6 +710,52 @@ namespace mhd
        old_solution=solution;
     }
   }
+
+  template <int dim>
+  void MHDProblem<dim>::CrankNicolson(unsigned int &iter, unsigned int &sitr)
+  {
+    lin_solution=old_solution;
+    iter=sitr=0;
+    for(;;){ // linearization
+      assemble_system(0);
+      sitr += solve();
+      corrections();
+      system_rhs=lin_solution;
+      system_rhs-=distributed_solution;
+      double err=system_rhs.linfty_norm();//norm_sqr();
+      if (err<linPrec) break;  //linfty_norm
+      iter++;
+      if (iter>=linmaxIt) break;
+      solution.swap(lin_solution);
+    }
+  }
+
+  template <int dim>
+  void MHDProblem<dim>::DIRKmethod(unsigned int &iter, unsigned int &sitr)
+  {
+    lin_solution=old_solution;
+    for(unsigned int i=0;i<mhdeq->DIRK.maxStage;i++){
+      mhdeq->setDIRKStage(i);
+      iter=sitr=0;
+      for(;;){ // linearization
+        assemble_system(i);
+        sitr += solve();
+        corrections();
+        system_rhs=lin_solution;
+        system_rhs-=distributed_solution;
+        double err=system_rhs.linfty_norm();//norm_sqr();
+        if (err<linPrec) break;  //linfty_norm
+        iter++;
+        if (iter>=linmaxIt) break;
+        solution.swap(lin_solution);
+      }
+      DIRK[i]=solution;
+    }
+    mhdeq->setDIRKStage(mhdeq->DIRK.maxStage);
+    assemble_system(mhdeq->DIRK.maxStage);
+    sitr += solve();
+    corrections();
+  }
   
   template <int dim>
   void MHDProblem<dim>::void_step()  // perform one time step with dt=0
@@ -648,7 +775,7 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::project_initial_conditions()
   {
-    QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
+    QGaussLobatto<dim> quadrature(FEO+gausIntOrd);// QGaussLobatto<dim>  -- qps are in interpolation points
     FEValues<dim> fe_values(fe, quadrature,
                              update_values   | //update_gradients |
                              update_quadrature_points | update_JxW_values);
@@ -704,7 +831,7 @@ namespace mhd
   void MHDProblem<dim>::corrections()
   {
     double RHSvalue,Uk,Um,buf;
-    QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
+    QGaussLobatto<dim> quadrature(FEO+gausIntOrd);// QGaussLobatto<dim>  -- qps are in interpolation points
     FEValues<dim> fe_values(fe, quadrature,
                              update_values   | //update_gradients |
                              update_quadrature_points | update_JxW_values);

@@ -3,15 +3,15 @@
 namespace mhd
 {
   template <int dim>
-  double MHDequations<dim>::setEtaConst()
+  double MHDequations<dim>::setEtaConst(int)
   {
     return ETAmax=ETApar1;
   }
   
   template <int dim>
-  double MHDequations<dim>::setEtaJ()
+  double MHDequations<dim>::setEtaJ(int i)
   {
-    double J=std::sqrt(vo[8]*vo[8]+vo[9]*vo[9]+vo[10]*vo[10]);
+    double J=std::sqrt(V[i][8]*V[i][8]+V[i][9]*V[i][9]+V[i][10]*V[i][10]);
     if (J>ETApar2){
       double eta = (J-ETApar2)*ETApar1;
       if (eta>ETAmax) ETAmax=eta;
@@ -20,9 +20,9 @@ namespace mhd
   }
   
   template <int dim>
-  double MHDequations<dim>::setEtaVD()
+  double MHDequations<dim>::setEtaVD(int i)
   {
-    double VD=std::sqrt(vo[8]*vo[8]+vo[9]*vo[9]+vo[10]*vo[10])/vo[0];
+    double VD=std::sqrt(V[i][8]*V[i][8]+V[i][9]*V[i][9]+V[i][10]*V[i][10])/V[i][0];
     if (VD>ETApar2){
       double eta = (VD-ETApar2)*ETApar1;
       if (eta>ETAmax) ETAmax=eta;

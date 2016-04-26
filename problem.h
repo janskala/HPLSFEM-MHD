@@ -107,6 +107,8 @@ namespace mhd
     ConstraintMatrix     constraints;
     
     FullMatrix<double>*  operator_matrixes;
+    std::vector<Vector<double> >*  DIRKv;
+    std::vector<std::vector<Tensor<1,dim> > >*  DIRKg;
     
     IndexSet             locally_owned_dofs;
     IndexSet             locally_relevant_dofs;
@@ -115,6 +117,7 @@ namespace mhd
 
     LA::MPI::SparseMatrix system_matrix;
 
+    LA::MPI::Vector*      DIRK;  // Diagonal Implicit Runge-Kutta y_1 ... y_4 (up to 4th stage)
     LA::MPI::Vector       solution;
     LA::MPI::Vector       old_solution;
     LA::MPI::Vector       lin_solution;
@@ -125,6 +128,11 @@ namespace mhd
     Vector<float>         shockIndicator;
     //BlockVector<float>   shockWeights;
     Vector<float>         shockWeights;
+    
+    void CrankNicolson(unsigned int &, unsigned int &);
+    void DIRKmethod(unsigned int &, unsigned int &);
+    typedef void (MHDProblem::*p2TimeStepInt)(unsigned int&, unsigned int&);
+    p2TimeStepInt timeStepInt;
     
     ConditionalOStream   pcout;
 #ifdef USE_TIMER
@@ -150,6 +158,8 @@ namespace mhd
     double meshCoaGrad;
     unsigned int initSplit;
     unsigned int initRefin;
+    unsigned int intMethod;
+    unsigned int gausIntOrd;
     
     mapDoFs stv2dof;    // state vectors to the dofs and dofs to state vectors
     
