@@ -98,6 +98,8 @@ namespace mhd
         feg[d][i] = new double[0];
     }
     
+    // default time integration method is theta scheme
+    setThetaMethod();
     
     for(unsigned int i=0;i<5;i++)
       for(unsigned int j=0;j<DIRK.maxStageAll;j++){
@@ -211,13 +213,14 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDequations<dim>::setCNMethod()
+  void MHDequations<dim>::setThetaMethod()
   {
     clcMat=&MHDequations::set_operators_full;
-    clcRhs=&MHDequations::set_rhs_CN;
+    clcRhs=&MHDequations::set_rhs_theta;
     DIRK.method=-1;
     DIRK.maxStage=-1;
     DIRK.stage=-1;
+    diagonal=false;
   }
   
   template <int dim>
@@ -228,26 +231,36 @@ namespace mhd
     DIRK.stage=0;
     clcMat=&MHDequations::set_operators_full;
     clcRhs=&MHDequations::set_rhs_DIRK;
+    NRLinBck=NRLin;
   }
   
   template <int dim>
   void MHDequations<dim>::setDIRKStage(unsigned int s)
   {
-    if (s>=DIRK.stages[DIRK.method]){
-      DIRK.stage=DIRK.stages[DIRK.method]-1;
+    if (int(s)>=DIRK.maxStage){
+      DIRK.stage=DIRK.maxStage-1;
       theta=1.0;
-      NRLinBck=NRLin;
       NRLin=false;    // In the last step we have pure explicit evaluation
       // set evaluation functions
       clcMat=&MHDequations::set_operators_diag;
+      clcRhs=&MHDequations::set_rhs_DIRK_last;
+      diagonal=true;
     }else{
       DIRK.stage=s;
-      theta=DIRK.ab[DIRK.method][s][s]*DIRK.tau[DIRK.method][s];
+      theta=DIRK.tau[DIRK.method][s]; // DIRK.ab[DIRK.method][s][s]*
       if (s==0){  // set evaluation functions
         clcMat=&MHDequations::set_operators_full;
+        clcRhs=&MHDequations::set_rhs_DIRK;
         NRLin=NRLinBck;
+        diagonal=false;
       }
     }
+  }
+  
+  template <int dim>
+  bool MHDequations<dim>::isDiagonal()
+  {
+    return diagonal;
   }
   
   template <int dim>
@@ -336,9 +349,7 @@ namespace mhd
   template <int dim>
   void MHDequations<dim>::calucate_matrix_rhs(FullMatrix<double> *O, Vector<double> &F)
   {
-  std::cout<<"0here!";
     (this->*clcMat)(O);
-std::cout<<"1here!";
     (this->*clcRhs)(F);
   }
   
@@ -396,19 +407,13 @@ std::cout<<"1here!";
       for(unsigned int k=0;k<Ne;k++)
         for(unsigned int l=0;l<Nv;l++)
           O[i](k,l)=0.0;
-      // diagonal part 1
-      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i];
-      for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=fev[l][i];
-
-      for(unsigned int d=0;d<dim;d++)
-        for(unsigned int k=Nt;k<Ne;k++)  // time independent part
-          for(unsigned int l=0;l<Nv;l++)
-            O[i](k,l)+=A[d][k][l]*dt*feg[d][l][i];
+      // diagonal part
+      for(unsigned int l=0;l<Nv;l++) O[i](l,l)=fev[l][i];
     }
   }
 
   template <int dim>
-  void MHDequations<dim>::set_rhs_CN(Vector<double> &F)
+  void MHDequations<dim>::set_rhs_theta(Vector<double> &F)
   {
     double sum[Nt],sum2[Nt],dtth,dtoth;
     
@@ -444,11 +449,11 @@ std::cout<<"1here!";
     F[11]=dt*(this->*setEta)(0);  // calculate it from old time values
   }
   
-    template <int dim>
+  template <int dim>
   void MHDequations<dim>::set_rhs_DIRK(Vector<double> &F)
   {
     double sum[Nt],dtth;
-std::cout<<"here!";
+
     for(unsigned int k=0;k<Nt;k++){
       F[k]=V[0][k];
       sum[k]=0.0;
@@ -466,8 +471,8 @@ std::cout<<"here!";
 
     F[11]=dt*(this->*setEta)(0);
     
-    for(unsigned int l=0;DIRK.stages[DIRK.stage];l++){
-      int lStage=2+DIRK.stage;
+    for(unsigned int l=0;l<DIRK.stage;l++){
+      int lStage=2+l;
       JacobiM(V[lStage]);
       
       for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
@@ -479,6 +484,45 @@ std::cout<<"here!";
           
       for(unsigned int k=0;k<Nt;k++)
         F[k]-=dt*DIRK.ab[DIRK.method][DIRK.stage][l]*sum[k];
+    }
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::set_rhs_DIRK_last(Vector<double> &F)
+  {
+    double sum[Nt];
+
+    for(unsigned int k=0;k<Nt;k++)
+      F[k]=V[0][k];
+    
+    for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
+    
+    for(unsigned int l=0;l<=DIRK.stage;l++){
+      int lStage=2+l;
+      JacobiM(V[lStage]);
+      
+      for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
+        
+      for(unsigned int d=0;d<dim;d++)
+        for(unsigned int k=0;k<Nt;k++)
+          for(unsigned int l=0;l<Nv;l++)
+            sum[k]+=A[d][k][l]*G[lStage][d][l];
+          
+      double dcf=DIRK.ab[DIRK.method][DIRK.stage+1][l];
+      double ddt=dt*dcf;
+      for(unsigned int k=0;k<Nt;k++)
+        F[k]-=ddt*sum[k];
+      
+      // add gravity terms
+      F[1]+=gravity[0]*V[lStage][0]*ddt;
+      F[2]+=gravity[1]*V[lStage][0]*ddt;
+      F[3]+=gravity[2]*V[lStage][0]*ddt;
+      F[7]+=ddt*(gravity[0]*V[lStage][1]+gravity[1]*V[lStage][2]+gravity[2]*V[lStage][3]);
+      
+      F[8]+= dcf*V[lStage][8];  // current density
+      F[9]+= dcf*V[lStage][9];
+      F[10]+=dcf*V[lStage][10];
+      F[11]+=dcf*(this->*setEta)(lStage); // resistivity
     }
   }
   

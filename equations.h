@@ -54,7 +54,7 @@ namespace mhd
     
     void setDIRKMethod(unsigned int);
     void setDIRKStage(unsigned int);
-    void setCNMethod();
+    void setThetaMethod();
     
     void set_state_vector_for_qp(std::vector<Vector<double> >**,
                         std::vector<std::vector<Tensor<1,dim> > >**,
@@ -65,8 +65,9 @@ namespace mhd
     void calucate_matrix_rhs(FullMatrix<double> *, Vector<double>&);
     void set_operators_full(FullMatrix<double> *);
     void set_operators_diag(FullMatrix<double> *);
-    void set_rhs_CN(Vector<double>&);
+    void set_rhs_theta(Vector<double>&);
     void set_rhs_DIRK(Vector<double>&);
+    void set_rhs_DIRK_last(Vector<double>&);
     
     void JacobiM(double v[]);
     void dxA(double v[], double dv[][Nv]);
@@ -87,6 +88,7 @@ namespace mhd
     double setEtaConst(int);
     double setEtaVD(int);
     double setEtaJ(int);
+    bool isDiagonal();  // for DIRK - last step uses diagonal matrix
     
 //     typedef void (MHDequations::*p2setEta)(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
     
@@ -158,6 +160,7 @@ namespace mhd
     
     bool          NRLin;               // Newton-Raphson linearization will be used
     bool          NRLinBck;            // Used in DIRK for backup NRLin in last part of DIRK
+    bool          diagonal;            // when DIRK is evaluating new values then use diagonal matrix
     
     mapDoFs&      stv2dof;
     

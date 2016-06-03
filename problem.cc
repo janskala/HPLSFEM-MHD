@@ -148,8 +148,8 @@ namespace mhd
         mhdeq->setDIRKMethod(intMethod-1);
         break;
       default:
-        timeStepInt=&MHDProblem::CrankNicolson;
-        mhdeq->setCNMethod();
+        timeStepInt=&MHDProblem::thetaMethod;
+        mhdeq->setThetaMethod();
         break;
     }
     
@@ -426,11 +426,11 @@ namespace mhd
           for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
             mhdeq->set_state_vector_for_qp(pVecVec,pVecTen, q_point);
             mhdeq->setFEvals(fe_values, q_point);
-            pcout<<"bele0\n";
             mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
-            pcout<<"bele1\n";
+            
             for(unsigned int i=0; i<stv2dof.Nstv; i++){
               for(unsigned int j=0; j<stv2dof.Nstv; j++){
+                //if (mhdeq->isDiagonal() && i!=j) continue;
                 for(unsigned int k=0; k<Nv; k++){
                   int dof_i=stv2dof.stateD[i][k];
                   if (dof_i<0) continue;
@@ -461,7 +461,7 @@ namespace mhd
 
           // Boundary conditions
           for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
-            if (cell->face(face_number)->at_boundary()){
+            if (cell->face(face_number)->at_boundary() && !mhdeq->isDiagonal()){
                 fe_face_values.reinit(cell, face_number);
 //                 fes_face_values.reinit(cells, face_number);
                 
@@ -470,13 +470,10 @@ namespace mhd
                 fe_face_values.get_function_values(lin_solution, lin_svf);
                 fe_face_values.get_function_gradients(lin_solution, lin_sgf);
                 for(int i=0; i<=mhdeq->DIRK.stage; i++){
-                  fe_values.get_function_values(DIRK[i], *(pVecVecf[2+i]));
-                  fe_values.get_function_gradients(DIRK[i], *(pVecTenf[2+i]));
+                  fe_face_values.get_function_values(DIRK[i], *(pVecVecf[2+i]));
+                  fe_face_values.get_function_gradients(DIRK[i], *(pVecTenf[2+i]));
                 }
-                //std::cout<<"here 0\n";
-//                 fes_face_values.get_function_values(eta, eta_vf);
-//                 fes_face_values.get_function_gradients(eta, eta_gf);
-                //std::cout<<"here 1\n";
+                
                 mhdeq->rhs.vector_value_list(fe_face_values.get_quadrature_points(),
                                             rhs_values);
                 initial_values.vector_value_list(fe_face_values.get_quadrature_points(),
@@ -492,13 +489,10 @@ namespace mhd
                   (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
                               pVecVecf,pVecTenf, init_values,
                               nrm, q_point);
-                  
+
                   mhdeq->setFEvals(fe_face_values,q_point);
                   mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
-                  // TODO: calling right functions for C-N or DIRK schemes
-//                   mhdeq->set_operator_matrixes(operator_matrixes, dofs_per_cell);
-            
-//                   mhdeq->set_rhs(cell_rhs_lin);
+                  
                   for(unsigned int i=0; i<stv2dof.Nstv; i++){ // unfortunately we have to go all over the dofs_per_cell
                     for(unsigned int j=0; j<stv2dof.Nstv; j++){ //   dofs_per_face does not cointain proper basis fce
                       for(unsigned int k=0; k<Nv; k++){
@@ -693,7 +687,7 @@ namespace mhd
         time_step++;
         time+=mhdeq->getDt();
         mhdeq->setNewDt();
-        
+
         if (time_step%5==0){
           setShockSmoothCoef(); // set refinement coeficients
           refine_grid_rule();
@@ -712,7 +706,7 @@ namespace mhd
   }
 
   template <int dim>
-  void MHDProblem<dim>::CrankNicolson(unsigned int &iter, unsigned int &sitr)
+  void MHDProblem<dim>::thetaMethod(unsigned int &iter, unsigned int &sitr)
   {
     lin_solution=old_solution;
     iter=sitr=0;
@@ -734,10 +728,12 @@ namespace mhd
   void MHDProblem<dim>::DIRKmethod(unsigned int &iter, unsigned int &sitr)
   {
     lin_solution=old_solution;
+    iter=sitr=0;
     for(int i=0;i<mhdeq->DIRK.maxStage;i++){
+      //pcout<<"DIRK stage: "<<i<<"\n";
       mhdeq->setDIRKStage(i);
-      iter=sitr=0;
       for(;;){ // linearization
+        //pcout<<"lin. step: "<<iter<<"\n";
         assemble_system(i);
         sitr += solve();
         corrections();
@@ -751,10 +747,13 @@ namespace mhd
       }
       DIRK[i]=solution;
     }
+//     output_results(1);
+//     pcout<<iter<<" lin it, DIRK end stage: "<<mhdeq->DIRK.maxStage<<"\n";
     mhdeq->setDIRKStage(mhdeq->DIRK.maxStage);
     assemble_system(mhdeq->DIRK.maxStage);
     sitr += solve();
     corrections();
+//     output_results(2);
   }
   
   template <int dim>
@@ -763,9 +762,10 @@ namespace mhd
     old_solution=solution;
     lin_solution=old_solution;
     mhdeq->setDt(0.0);
+    if (intMethod!=0) mhdeq->setDIRKStage(0);
     assemble_system(0);
     solve();
-    mhdeq->checkOverflow(distributed_solution,old_solution);
+    //mhdeq->checkOverflow(distributed_solution,old_solution);
     solution=distributed_solution;
     //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
     //mhdeq->checkDt(solution);

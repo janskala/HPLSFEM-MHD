@@ -129,7 +129,7 @@ namespace mhd
     //BlockVector<float>   shockWeights;
     Vector<float>         shockWeights;
     
-    void CrankNicolson(unsigned int &, unsigned int &);
+    void thetaMethod(unsigned int &, unsigned int &);
     void DIRKmethod(unsigned int &, unsigned int &);
     typedef void (MHDProblem::*p2TimeStepInt)(unsigned int&, unsigned int&);
     p2TimeStepInt timeStepInt;
