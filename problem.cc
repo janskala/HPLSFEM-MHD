@@ -24,7 +24,7 @@ namespace mhd
   {
     setup_parameters(pars);
   }
-  
+  /*
   template <> // velocity is Arnold-Boffi-Falk (2D vectors) elements, B is Nedelec (2D vectors) elm. and the rest is Lagrange
   MHDProblem<2>::MHDProblem(Params &pars) :
       mpi_communicator(MPI_COMM_WORLD),
@@ -47,7 +47,7 @@ namespace mhd
   {
     setup_parameters(pars);
   }
-  
+  */
 //   template <>  // velocity is Arnold-Boffi-Falk (3D vectors) elements, B is Nedelec (3D vectors) elm. and the rest is Lagrange
 //   MHDProblem<3>::MHDProblem(Params &pars) :
 //       mpi_communicator(MPI_COMM_WORLD),
@@ -867,7 +867,7 @@ namespace mhd
               switch(cmp_i){
                 case 0:  // density
                   RHSvalue=lv[p][cmp_i];
-                  if (RHSvalue<0.1) RHSvalue=0.1;
+                  if (RHSvalue<0.25) RHSvalue=0.25;
                   break;
                 case 7:  // pressure
                   RHSvalue=lv[p][cmp_i];
