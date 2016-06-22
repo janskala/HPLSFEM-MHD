@@ -24,7 +24,7 @@ namespace mhd
   {
     setup_parameters(pars);
   }
-  
+  /*
   template <> // velocity is Arnold-Boffi-Falk (2D vectors) elements, B is Nedelec (2D vectors) elm. and the rest is Lagrange
   MHDProblem<2>::MHDProblem(Params &pars) :
       mpi_communicator(MPI_COMM_WORLD),
@@ -47,7 +47,7 @@ namespace mhd
   {
     setup_parameters(pars);
   }
-  
+  */
 //   template <>  // velocity is Arnold-Boffi-Falk (3D vectors) elements, B is Nedelec (3D vectors) elm. and the rest is Lagrange
 //   MHDProblem<3>::MHDProblem(Params &pars) :
 //       mpi_communicator(MPI_COMM_WORLD),
@@ -94,6 +94,7 @@ namespace mhd
     pars.prm.enter_subsection("Simulation");
     {
       totalTime=pars.prm.get_double("Total time");
+      initCond=pars.prm.get_integer("Initial condition");
     }
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Numerics");
@@ -111,8 +112,8 @@ namespace mhd
     {
       meshMinLev=pars.prm.get_integer("Minimum level");
       meshMaxLev=pars.prm.get_integer("Maximum level");
-      meshRefGrad=pars.prm.get_double("Refining gradient");
-      meshCoaGrad=pars.prm.get_double("Coarsing gradient");
+      meshRefGrad=-pars.prm.get_double("Refining gradient"); // switch sign for human convenience
+      meshCoaGrad=-pars.prm.get_double("Coarsing gradient");
       initSplit=pars.prm.get_integer("Initial division");
       initRefin=pars.prm.get_integer("Initial refinement");
     }
@@ -137,6 +138,7 @@ namespace mhd
     initial_values.setParameters(pars);
     
     mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
+    mhdeq->setBoxRef(&boxP1,&boxP2);
     
     switch(intMethod){
       case 1:
@@ -159,7 +161,7 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::setDofMapping()
   {
-    // Set mapping from dof to system component and vice versa
+    // Set mapping from dof to MHD system component and vice versa
     QGauss<dim> quadrature(FEO+gausIntOrd);
     double intFEval;
     FEValues<dim> fe_values(fe, quadrature, update_values | update_quadrature_points);
@@ -485,10 +487,11 @@ namespace mhd
                   // get pointer to function which setup BC for given type defined in params
                   int bi = cell->face(face_number)->boundary_id();
                   const Tensor<1,dim> &nrm=fe_face_values.normal_vector(q_point);
+                  const Point<dim> &pt=fe_face_values.quadrature_point(q_point);
                   // call BC function and setup state vectors
                   (mhdeq->*(mhdeq->BCp[BCmap[bi] ])) (
                               pVecVecf,pVecTenf, init_values,
-                              nrm, q_point);
+                              nrm, pt, q_point);
 
                   mhdeq->setFEvals(fe_face_values,q_point);
                   mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
@@ -626,7 +629,9 @@ namespace mhd
     old_solution=solution;
     setShockSmoothCoef(); // set refinement coeficients
     output_results(output_counter++);
-    for(double time=0.0; time<totalTime; ){
+    double time;
+    mhdeq->setTimeRef(&time);
+    for(time=0.0; time<totalTime; ){
         if (time_step%10==0) pcout << "Time: " << time <<", time step: "<<time_step<< std::endl;
 
         lin_solution=old_solution;
@@ -773,61 +778,6 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDProblem<dim>::project_initial_conditions()
-  {
-    QGaussLobatto<dim> quadrature(FEO+gausIntOrd);// QGaussLobatto<dim>  -- qps are in interpolation points
-    FEValues<dim> fe_values(fe, quadrature,
-                             update_values   | //update_gradients |
-                             update_quadrature_points | update_JxW_values);
-    const unsigned int dofs_per_cell = fe_values.dofs_per_cell,
-                       n_q_points    = fe_values.n_quadrature_points;
-    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
-    Vector<double> cell_rhs(dofs_per_cell);
-    FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
-    std::vector<Vector<double> > rhs_values(n_q_points, Vector<double>(Ne));
-    
-    system_matrix=0.0;
-    system_rhs=0.0;
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = dof_handler.begin_active(),
-    endc = dof_handler.end();
-    for(; cell!=endc; ++cell)
-      if(cell->is_locally_owned()){
-          fe_values.reinit(cell);
-          initial_values.vector_value_list(fe_values.get_quadrature_points(),
-                                          rhs_values);
-          cell_rhs = 0;
-          cell_matrix = 0;
-              
-          for(unsigned int point=0; point<n_q_points; ++point){
-          
-            for(unsigned int i=0; i<stv2dof.Ndofs; ++i){
-              const unsigned int cmp_i = stv2dof.cmpInx[i];
-              const unsigned int dof_i = stv2dof.dof[i];
-              cell_rhs(dof_i) += rhs_values[point][cmp_i]*
-                                fe_values.shape_value_component(dof_i,point,cmp_i)*
-                                fe_values.JxW(point);
-                                
-              cell_matrix(dof_i,dof_i) += fe_values.shape_value_component(dof_i,point,cmp_i)*
-                                fe_values.shape_value_component(dof_i,point,cmp_i)*
-                                fe_values.JxW(point);
-
-            }
-          }
-          cell->get_dof_indices(local_dof_indices);
-          constraints.distribute_local_to_global(cell_matrix,
-                                                cell_rhs,
-                                                local_dof_indices,
-                                                system_matrix,
-                                                system_rhs);       
-        }
-    system_matrix.compress(VectorOperation::add);
-    system_rhs.compress(VectorOperation::add);
-    
-    solve();
-  }
-  
-  template <int dim>
   void MHDProblem<dim>::corrections()
   {
     double RHSvalue,Uk,Um,buf;
@@ -861,45 +811,55 @@ namespace mhd
               
           for(unsigned int p=0; p<n_q_points; ++p){
           
-            for(unsigned int i=0; i<stv2dof.Ndofs; ++i){
-              const unsigned int cmp_i = stv2dof.cmpInx[i];
-              const unsigned int dof_i = stv2dof.dof[i];
-              switch(cmp_i){
-                case 0:  // density
-                  RHSvalue=lv[p][cmp_i];
-                  if (RHSvalue<0.1) RHSvalue=0.1;
-                  break;
-                case 7:  // pressure
-                  RHSvalue=lv[p][cmp_i];
-                  Uk=(lv[p][1]*lv[p][1]+lv[p][2]*lv[p][2]+lv[p][3]*lv[p][3])/(lv[p][0]);
-                  Um=lv[p][4]*lv[p][4]+lv[p][5]*lv[p][5]+lv[p][6]*lv[p][6];
-                  buf=Um+Uk;
-                  if ((RHSvalue-buf)<1e-6) RHSvalue=buf+1e-6;
-                  break;
-//                 case 1:
-//                 case 2:
-//                 case 3:
-//                 case 4:
-//                 case 5:
-//                 case 6:
-//                 case 8:
-//                 case 9:
-//                 case 10:
-//                 case 11:
-                default:
-                  RHSvalue=lv[p][cmp_i];
-                break;
+            for(unsigned int i=0; i<stv2dof.Nstv; i++){
+              for(unsigned int j=0; j<stv2dof.Nstv; j++){ // Assemble system for identity operator
+                for(unsigned int k=0; k<Nv; k++){
+                  const int dof_i=stv2dof.stateD[i][k];
+                  if (dof_i<0) continue;
+                  const int dof_j=stv2dof.stateD[j][k];
+                  if (dof_j<0) continue;
+                  
+                  cell_matrix(dof_i,dof_j) += fe_values.shape_value_component(dof_i,p,k)*
+                                    fe_values.shape_value_component(dof_j,p,k)*
+                                    fe_values.JxW(p);
+                }
               }
-              cell_rhs(dof_i) += RHSvalue*
-                                fe_values.shape_value_component(dof_i,p,cmp_i)*
-                                fe_values.JxW(p);
-                                
-              cell_matrix(dof_i,dof_i) += fe_values.shape_value_component(dof_i,p,cmp_i)*
-                                fe_values.shape_value_component(dof_i,p,cmp_i)*
-                                fe_values.JxW(p);
+              for(unsigned int k=0; k<Nv; k++){      // Check values for underflow (density and pressue)
+                const int dof_i=stv2dof.stateD[i][k];
+                if (dof_i<0) continue;
+                switch(k){
+                  case 0:  // density
+                    RHSvalue=lv[p][k];
+                    if (RHSvalue<0.25) RHSvalue=0.25;
+                    break;
+                  case 7:  // pressure
+                    RHSvalue=lv[p][k];
+                    Uk=(lv[p][1]*lv[p][1]+lv[p][2]*lv[p][2]+lv[p][3]*lv[p][3])/(lv[p][0]);
+                    Um=lv[p][4]*lv[p][4]+lv[p][5]*lv[p][5]+lv[p][6]*lv[p][6];
+                    buf=Um+Uk;
+                    if ((RHSvalue-buf)<1e-6) RHSvalue=buf+1e-6;
+                    break;
+//                   case 1:
+//                   case 2:
+//                   case 3:
+//                   case 4:
+//                   case 5:
+//                   case 6:
+//                   case 8:
+//                   case 9:
+//                   case 10:
+//                   case 11:
+                  default:
+                    RHSvalue=lv[p][k];
+                  break;
+                }
+                cell_rhs(dof_i) += RHSvalue*
+                                  fe_values.shape_value_component(dof_i,p,k)*
+                                  fe_values.JxW(p);
+              }
 
-            }
-          }
+            } // end of i-loop
+          }  // end of p-loop
           cell->get_dof_indices(local_dof_indices);
           constraints.distribute_local_to_global(cell_matrix,
                                                 cell_rhs,

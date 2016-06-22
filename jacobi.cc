@@ -8,8 +8,7 @@ namespace mhd
   {
     double iRh, iRh2, Uk, p, GAMMAmo, Ec1, Ec2, Ec3, E1, E2, E3;
 
-    // using shorter notation for old solution
-    // order of the variables is following: rho, v(3), B(3), U, J(3)
+    // order of the variables in v[] is following: rho, rho*v(3), B(3), U, J(3)
 
     iRh = 1.0 / v[0];
     iRh2 = iRh*iRh;

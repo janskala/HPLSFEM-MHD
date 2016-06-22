@@ -85,6 +85,8 @@ namespace mhd
 //     void setEtaConst(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaVD(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaJ(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
+    void setTimeRef(double*); // reference on the simulation time
+    void setBoxRef(Point<dim>*,Point<dim>*);  // reference on the simulation box geometry
     double setEtaConst(int);
     double setEtaVD(int);
     double setEtaJ(int);
@@ -96,27 +98,38 @@ namespace mhd
                         std::vector<std::vector<Tensor<1,dim> > >*[],
                         std::vector<Vector<double> >&, // initial values
                         const Tensor<1,dim>&,  // normal
+                        const Point<dim>&,     // point
                         const unsigned int); // qp
-    p2BC        BCp[4];
+    p2BC        BCp[5];
     void constantBC(std::vector<Vector<double> >*[],
                     std::vector<std::vector<Tensor<1,dim> > >*[],
                     std::vector<Vector<double> >&, // initial values
                     const Tensor<1,dim>&,  // normal
+                    const Point<dim>&,     // point
                     const unsigned int); // qp
     void freeBC(std::vector<Vector<double> >*[],
                 std::vector<std::vector<Tensor<1,dim> > >*[],
                 std::vector<Vector<double> >&, // initial values
                 const Tensor<1,dim>&,  // normal
+                    const Point<dim>&,     // point
                 const unsigned int); // qp
     void noFlowBC(std::vector<Vector<double> >*[],
                   std::vector<std::vector<Tensor<1,dim> > >*[],
                   std::vector<Vector<double> >&, // initial values
                   const Tensor<1,dim>&,  // normal
+                    const Point<dim>&,     // point
                   const unsigned int); // qp
     void mirrorBC(std::vector<Vector<double> >*[],
                   std::vector<std::vector<Tensor<1,dim> > >*[],
                   std::vector<Vector<double> >&, // initial values
                   const Tensor<1,dim>&,  // normal
+                    const Point<dim>&,     // point
+                  const unsigned int); // qp
+    void vortexBC(std::vector<Vector<double> >*[],
+                  std::vector<std::vector<Tensor<1,dim> > >*[],
+                  std::vector<Vector<double> >&, // initial values
+                  const Tensor<1,dim>&,  // normal
+                    const Point<dim>&,     // point
                   const unsigned int); // qp
   
     void reinitFEval();
@@ -145,15 +158,18 @@ namespace mhd
     double               *fev[Nv],*feg[3][Nv];
     double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0,1e-0, 1e0,1e0};
     
-    double        dt;                    // time step size
+    double        dt;                  // time step size
     double        newdt;
     double        theta=0.6;
     double        GAMMA=5.0/3.0;
     double        gravity[3];
-    int           ETAmet;               // which method is used to set resistivity
+    int           ETAmet;              // which method is used to set resistivity
     double        ETA,ETAg[3],ETAmax;
     double        ETApar1,ETApar2;
     double        CFL=0.2;
+    double        *time;               // reference on simulation time
+    const Point<dim> *boxP1;
+    const Point<dim> *boxP2;
     
     double        vmax;
     double        hmin;

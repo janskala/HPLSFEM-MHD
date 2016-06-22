@@ -44,6 +44,8 @@ namespace mhd
   {
     newdt=dt=1e-6;
     vmax=0.0;
+    time=nullptr;
+    boxP1=boxP1=nullptr;
     
     for(unsigned int i=0;i<Ne;i++){
 //       Flx[0][i]=Flx[1][i]=Flx[2][i]=0.0;
@@ -91,6 +93,7 @@ namespace mhd
     BCp[1]=&MHDequations::freeBC;
     BCp[2]=&MHDequations::noFlowBC;
     BCp[3]=&MHDequations::mirrorBC;
+    BCp[4]=&MHDequations::vortexBC;
     
     for(unsigned int i=0;i<Nv;i++){
       fev[i] = new double[0];
@@ -207,9 +210,22 @@ namespace mhd
   }
   
   template <int dim>
+  void MHDequations<dim>::setTimeRef(double *t)
+  {
+    time=t;
+  }
+  
+  template <int dim>
   void MHDequations<dim>::useNRLinearization(bool bl)
   {
     NRLin=bl;
+  }
+  
+  template <int dim>
+  void MHDequations<dim>::setBoxRef(Point<dim> *P1,Point<dim> *P2)
+  {
+    boxP1=P1;
+    boxP2=P2;
   }
   
   template <int dim>

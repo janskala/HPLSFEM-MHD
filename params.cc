@@ -1,5 +1,5 @@
 #include "params.h"
-#include <deal.II/base/utilities.h>
+#include <deal.II/base/mpi.h>
 
 namespace mhd
 {
@@ -127,9 +127,9 @@ namespace mhd
                          Patterns::Integer(2,3),
                          "Number of dimensions");
       prm.declare_entry("Initial condition", "0",
-                         Patterns::Integer(0,2),
+                         Patterns::Integer(0,3),
                          "Initial condition"
-                         "0 - MHD blast, 1 - Harris CS, 2 - debug");
+                         "0 - MHD blast, 1 - Harris CS, 2 - Titov&Demoulin, 3 - debug");
       prm.declare_entry("Total time", "1.0",
                          Patterns::Double(0,9e99),
                          "The time when the simulation will be terminated.");
@@ -164,12 +164,12 @@ namespace mhd
       prm.leave_subsection();
       prm.enter_subsection("BC");
       {
-        prm.declare_entry("x_min", "0", Patterns::Integer(0,3), "Minimum of x, 0 - constant BC, 1 - free BC, 2 - no flow BC, 3 - mirror BC");
-        prm.declare_entry("x_max", "0", Patterns::Integer(0,3), "Maximum of x");
-        prm.declare_entry("y_min", "0", Patterns::Integer(0,3), "Minimum of y");
-        prm.declare_entry("y_max", "0", Patterns::Integer(0,3), "Maximum of y");
-        prm.declare_entry("z_min", "0", Patterns::Integer(0,3), "Minimum of z");
-        prm.declare_entry("z_max", "0", Patterns::Integer(0,3), "Maximum of z");
+        prm.declare_entry("x_min", "0", Patterns::Integer(0,4), "Minimum of x, 0 - constant BC, 1 - free BC, 2 - no flow BC, 3 - mirror BC, 4 - vortex");
+        prm.declare_entry("x_max", "0", Patterns::Integer(0,4), "Maximum of x");
+        prm.declare_entry("y_min", "0", Patterns::Integer(0,4), "Minimum of y");
+        prm.declare_entry("y_max", "0", Patterns::Integer(0,4), "Maximum of y");
+        prm.declare_entry("z_min", "0", Patterns::Integer(0,4), "Minimum of z");
+        prm.declare_entry("z_max", "0", Patterns::Integer(0,4), "Maximum of z");
       }
       prm.leave_subsection();
     }

@@ -18,6 +18,7 @@ SET(TARGET "HPLSFEM-MHD")
 SET(TARGET_SRC
   ${TARGET}.cc problem.cc refine.cc initcon.cc equations.cc boundary.cc
   jacobi.cc params.cc resistivity.cc postprocessor.cc output.cc
+  complete_elliptic_integrals.cc
   )
 
 # Usually, you will not need to modify anything beyond this point...

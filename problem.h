@@ -88,7 +88,8 @@ namespace mhd
     void setShockSmoothCoef();
     void transfer_solution();
     void output_results(const unsigned int cycle);
-    void project_initial_conditions();
+    void project_initial_conditions();  // implemented in initcon.cc
+    void project_init_cnd_vecpot();     // implemented in initcon.cc
     void corrections();
     void void_step();
     void setDofMapping();
@@ -160,6 +161,7 @@ namespace mhd
     unsigned int initRefin;
     unsigned int intMethod;
     unsigned int gausIntOrd;
+    unsigned int initCond;
     
     mapDoFs stv2dof;    // state vectors to the dofs and dofs to state vectors
     
