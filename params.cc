@@ -295,13 +295,7 @@ namespace mhd
       }
     }  // end of while - parameters
     // read parameters from the file
-    if (!prm.read_input(paramFile)){
-      std::cerr << "Error: a paremeter file do not exist."
-                  << std::endl;
-      print_usage_message();
-      exit(2);
-              
-    }
+    prm.parse_input(paramFile);
   }
   
   Params::~Params()

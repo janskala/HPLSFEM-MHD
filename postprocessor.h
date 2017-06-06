@@ -13,13 +13,10 @@ namespace mhd
   {
   public:
     Postprocessor();
-    virtual void
-    compute_derived_quantities_vector(const std::vector<Vector<double> >              &,
-                                      const std::vector<std::vector<Tensor<1,dim> > > &,
-                                      const std::vector<std::vector<Tensor<2,dim> > > &,
-                                      const std::vector<Point<dim> >                  &,
-                                      const std::vector<Point<dim> >                  &,
-                                      std::vector<Vector<double> >                    &) const;
+    
+    virtual void evaluate_vector_field(const DataPostprocessorInputs::Vector<dim> &,
+                                       std::vector<Vector<double> > &) const;
+                                       
     virtual std::vector<std::string> get_names() const;
     virtual std::vector<DataComponentInterpretation::DataComponentInterpretation>
             get_data_component_interpretation() const;

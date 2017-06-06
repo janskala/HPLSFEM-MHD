@@ -586,18 +586,22 @@ namespace mhd
     std::vector<unsigned int> rep(dim);
 
     pcout<<"Initial mesh refinement..."<<std::endl;
-    for(unsigned int i=0;i<dim;i++){ 
+    for(unsigned int i=0;i<dim;i++){
       sz[i]=std::fabs(boxP1[i]-boxP2[i]);
       if (sz[i]>maxSiz) maxSiz=sz[i];
     }
     // initial refinement of the box is non-homogenous in order to have cube cells (if possible)
-    for(unsigned int i=0;i<dim;i++) rep[i]=(unsigned int)(4*sz[i]/maxSiz+0.5);
+    for(unsigned int i=0;i<dim;i++){
+      rep[i]=(unsigned int)(4*sz[i]/maxSiz+0.5);
+      if (rep[i]==0) rep[i]=1;
+    }
+    
     GridGenerator::subdivided_hyper_rectangle(triangulation, rep, boxP1, boxP2, true); // set box and colorize boundaries
-    triangulation.refine_global(initSplit); // 6
-    pcout << "   initial mesh, ndofs: "<< dof_handler.n_dofs() << std::endl;
+    triangulation.refine_global(initSplit);
     mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
     setup_system();
     setDofMapping();
+    pcout << "   initial mesh, ndofs: "<< dof_handler.n_dofs() << std::endl;
     
     pcout<<"Refine gradients in initial conditions..."<<std::endl;
     for(unsigned int i=0;i<initRefin;i++){ // 5

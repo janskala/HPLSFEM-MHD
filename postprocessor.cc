@@ -53,16 +53,12 @@ namespace mhd
   }
   
   template <int dim>
-  void Postprocessor<dim>::
-  compute_derived_quantities_vector(const std::vector<Vector<double> >              &uh,
-                                    const std::vector<std::vector<Tensor<1,dim> > > &duh,
-                                    const std::vector<std::vector<Tensor<2,dim> > > &/*dduh*/,
-                                    const std::vector<Point<dim> >                  &/*normals*/,
-                                    const std::vector<Point<dim> >                  &/*evaluation_points*/,
-                                    std::vector<Vector<double> >                    &comp_quan) const
+  void Postprocessor<dim>::evaluate_vector_field(const DataPostprocessorInputs::Vector<dim> &inputs,
+                            std::vector<Vector<double> > &comp_quan) const
   {
+    const std::vector<Vector<double> > &uh=inputs.solution_values;
     const unsigned int n_quadrature_points = uh.size();
-    Assert (duh.size() == n_quadrature_points,                  ExcInternalError());
+    
     Assert (comp_quan.size() == n_quadrature_points,  ExcInternalError());
 
     for(unsigned int q=0; q<n_quadrature_points; ++q){

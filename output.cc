@@ -57,7 +57,7 @@ namespace mhd
                                Utilities::int_to_string (fileNum, 5) +
                                ".visit");
       std::ofstream visit_master (visit_master_filename.c_str());
-      data_out.write_visit_record (visit_master, filenames);
+      data_out.write_pvtu_record(visit_master, filenames);
     }
   }
   
