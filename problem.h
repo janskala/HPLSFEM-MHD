@@ -14,13 +14,13 @@
 #include <deal.II/distributed/grid_refinement.h>
 #include <deal.II/distributed/solution_transfer.h>
 
-#define USE_PETSC_LA
+//#define USE_PETSC_LA
 namespace LA
 {
 #ifdef USE_PETSC_LA
-  using namespace dealii::LinearAlgebraPETSc;
+  using namespace dealii::PETScWrappers;
 #else
-  using namespace dealii::LinearAlgebraTrilinos;
+  using namespace dealii::TrilinosWrappers;
 #endif
 }
 
@@ -116,7 +116,7 @@ namespace mhd
 //     IndexSet             local_dofs;  // eta dofs
 //     IndexSet             local_relevant_dofs;  // eta
 
-    LA::MPI::SparseMatrix system_matrix;
+    LA::SparseMatrix system_matrix;
 
     LA::MPI::Vector*      DIRK;  // Diagonal Implicit Runge-Kutta y_1 ... y_4 (up to 4th stage)
     LA::MPI::Vector       solution;

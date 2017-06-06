@@ -549,19 +549,19 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "solve");
 #endif
-    SolverControl    solver_control(CGMmaxIt, CGMprec); // 1000, 1e-14
+    SolverControl solver_control(CGMmaxIt, CGMprec); // 1000, 1e-14
     
-    LA::SolverCG solver(solver_control, mpi_communicator);
+    LA::SolverCG solver(solver_control);//, mpi_communicator);
     
     //LA::MPI::PreconditionAMG preconditioner;
     //LA::MPI::PreconditionAMG::AdditionalData data;
     
-    LA::MPI::PreconditionJacobi preconditioner;
-    LA::MPI::PreconditionJacobi::AdditionalData data;
+    LA::PreconditionJacobi preconditioner;
+    LA::PreconditionJacobi::AdditionalData data;
 #ifdef USE_PETSC_LA
     //data.symmetric_operator = true;
 #else
-    / * Trilinos defaults are good * /
+    /* Trilinos defaults are good */
 #endif
     preconditioner.initialize(system_matrix, data);
     solver.solve (system_matrix, distributed_solution, system_rhs,

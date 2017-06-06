@@ -1,5 +1,5 @@
 ##
-#  CMake script for the step-40 tutorial program:
+#  CMake script for the step-32 tutorial program:
 ##
 
 # Set the name of the project and target:
@@ -21,11 +21,14 @@ SET(TARGET_SRC
   complete_elliptic_integrals.cc
   )
 
+# Define the output that should be cleaned:
+SET(CLEAN_UP_FILES *.vtu *.pvtu *.visit)
+
 # Usually, you will not need to modify anything beyond this point...
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 
-FIND_PACKAGE(deal.II 8.4 QUIET
+FIND_PACKAGE(deal.II 9.0.0 QUIET
   HINTS ${deal.II_DIR} ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
 IF(NOT ${deal.II_FOUND})
@@ -39,19 +42,16 @@ ENDIF()
 #
 # Are all dependencies fulfilled?
 #
-IF(NOT (DEAL_II_WITH_PETSC OR DEAL_II_WITH_TRILINOS) OR NOT DEAL_II_WITH_P4EST)
+IF(NOT DEAL_II_WITH_MPI OR NOT DEAL_II_WITH_P4EST OR NOT DEAL_II_WITH_TRILINOS) # keep in one line
   MESSAGE(FATAL_ERROR "
 Error! The deal.II library found at ${DEAL_II_PATH} was not configured with
-    DEAL_II_WITH_PETSC = ON
+    DEAL_II_WITH_MPI = ON
     DEAL_II_WITH_P4EST = ON
-or
     DEAL_II_WITH_TRILINOS = ON
-    DEAL_II_WITH_P4EST = ON
-One or both of these combinations are OFF in your installation but at least one is required for this tutorial step."
+One or all of these are OFF in your installation but are required for this tutorial step."
     )
 ENDIF()
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
-SET(CLEAN_UP_FILES *.log *.gmv *.gnuplot *.gpl *.eps *.pov *.vtk *.ucd *.d2 *.vtu *.pvtu)
 PROJECT(${TARGET})
 DEAL_II_INVOKE_AUTOPILOT()
