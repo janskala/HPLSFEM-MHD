@@ -14,7 +14,7 @@
 #include <deal.II/distributed/grid_refinement.h>
 #include <deal.II/distributed/solution_transfer.h>
 
-//#define USE_PETSC_LA
+#define USE_PETSC_LA
 namespace LA
 {
 #ifdef USE_PETSC_LA
@@ -116,7 +116,11 @@ namespace mhd
 //     IndexSet             local_dofs;  // eta dofs
 //     IndexSet             local_relevant_dofs;  // eta
 
-    LA::SparseMatrix system_matrix;
+#ifdef USE_PETSC_LA
+  LA::MPI::SparseMatrix   system_matrix;
+#else
+  LA::SparseMatrix        system_matrix;
+#endif
 
     LA::MPI::Vector*      DIRK;  // Diagonal Implicit Runge-Kutta y_1 ... y_4 (up to 4th stage)
     LA::MPI::Vector       solution;
@@ -143,7 +147,7 @@ namespace mhd
     InitialValues<dim>   initial_values;
     
     int                  BCmap[6]; 
-    Point<dim> boxP1,boxP2;  // Box definition
+    Point<dim>           boxP1,boxP2;  // Box definition
     
     double totalTime;
     double outputFreq;

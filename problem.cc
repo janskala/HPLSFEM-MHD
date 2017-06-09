@@ -112,8 +112,8 @@ namespace mhd
     {
       meshMinLev=pars.prm.get_integer("Minimum level");
       meshMaxLev=pars.prm.get_integer("Maximum level");
-      meshRefGrad=-pars.prm.get_double("Refining gradient"); // switch sign for human convenience
-      meshCoaGrad=-pars.prm.get_double("Coarsing gradient");
+      meshRefGrad=pars.prm.get_double("Refining gradient"); // switch sign for human convenience
+      meshCoaGrad=pars.prm.get_double("Coarsing gradient");
       initSplit=pars.prm.get_integer("Initial division");
       initRefin=pars.prm.get_integer("Initial refinement");
     }

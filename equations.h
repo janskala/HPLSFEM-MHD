@@ -6,7 +6,7 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/lac/generic_linear_algebra.h>
 
-//#define USE_PETSC_LA
+#define USE_PETSC_LA
 namespace LA
 {
 #ifdef USE_PETSC_LA
