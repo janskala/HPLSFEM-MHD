@@ -6,15 +6,59 @@
 
 namespace mhd
 {
-  // Initial conditions
+  /***************************************************************************
+          Initial Condition
+  ***************************************************************************/
   template <int dim>
-  void InitialValues<dim>::mhdBlast(const Point<dim> &p,
+  InitialValues<dim>::InitialValues(Params &pars)
+  {
+    pars.prm.enter_subsection("Simulation");
+    {
+      GAMMA=pars.prm.get_double("gamma");
+    }
+    pars.prm.leave_subsection();
+  }
+  
+  template <int dim>
+  void InitialValues<dim>::vector_value_list(const std::vector<Point<dim> > &points,
+                                              std::vector<Vector<double> >   &value_list) const
+  {
+    for(unsigned int p=0; p<points.size(); ++p)
+      this->point_value(points[p], value_list[p]);
+  }
+  
+  
+  /***************************************************************************
+          MHD Blast initial condition
+  ***************************************************************************/
+  template <int dim>
+  mhdBlast<dim>::mhdBlast(Params &pars):InitialValues<dim>(pars)
+  {
+    pars.prm.enter_subsection("Simulation");
+    {
+      pars.prm.enter_subsection("Box");
+      {
+        box[0][0]=pars.prm.get_double("x_min");
+        box[0][1]=pars.prm.get_double("y_min");
+        if (dim==3) box[0][2]=pars.prm.get_double("z_min");
+        box[1][0]=pars.prm.get_double("x_max");
+        box[1][1]=pars.prm.get_double("y_max");
+        if (dim==3) box[1][2]=pars.prm.get_double("z_max");
+      }
+      pars.prm.leave_subsection();
+    }
+    pars.prm.leave_subsection();
+  }
+  
+  
+  template <int dim>
+  void mhdBlast<dim>::point_value(const Point<dim> &p,
                                         Vector<double> &v) const
   {
     if (p.norm()<0.1){ // 0.1
-        v(7)=10.0/(GAMMA-1.0)+1.0; // U
+        v(7)=10.0/(this->GAMMA-1.0)+1.0; // U
     }else{
-        v(7)=0.1/(GAMMA-1.0)+1.0; // U
+        v(7)=0.1/(this->GAMMA-1.0)+1.0; // U
     } 
     v(0)=1.0; // rho
     v(1)=0.0; // v
@@ -31,8 +75,30 @@ namespace mhd
     v(11)=0.0; // eta
   }
   
+  /***************************************************************************
+          Harris Current Sheet initial condition
+  ***************************************************************************/
   template <int dim>
-  void InitialValues<dim>::harris(const Point<dim> &p,
+  harris<dim>::harris(Params &pars):InitialValues<dim>(pars)
+  {
+    pars.prm.enter_subsection("Simulation");
+    {      
+      pars.prm.enter_subsection("Box");
+      {
+        box[0][0]=pars.prm.get_double("x_min");
+        box[0][1]=pars.prm.get_double("y_min");
+        if (dim==3) box[0][2]=pars.prm.get_double("z_min");
+        box[1][0]=pars.prm.get_double("x_max");
+        box[1][1]=pars.prm.get_double("y_max");
+        if (dim==3) box[1][2]=pars.prm.get_double("z_max");
+      }
+      pars.prm.leave_subsection();
+    }
+    pars.prm.leave_subsection();
+  }
+  
+  template <int dim>
+  void harris<dim>::point_value(const Point<dim> &p,
                                         Vector<double> &v) const
   {
     double yy,xx;
@@ -49,7 +115,7 @@ namespace mhd
     v(5)=std::tanh(xx)-4e-2*xx*exp(-(xx*xx+yy*yy)/8.0);
     v(6)=0.0;
     pressure=0.05+1.0-v(5)*v(5);
-    v(7)=pressure/(GAMMA-1.0)+v(5)*v(5)+v(1)*v(1); // U
+    v(7)=pressure/(this->GAMMA-1.0)+v(5)*v(5)+v(1)*v(1); // U
     v(8)=0.0;  // J
     v(9)=0.0;
     v(10)=1.0/(std::cosh(xx)*std::cosh(xx));
@@ -57,8 +123,16 @@ namespace mhd
     v(11)=0.0; // eta
   }
   
+  /***************************************************************************
+          Debugging initial condition
+  ***************************************************************************/
   template <int dim>
-  void InitialValues<dim>::debug(const Point<dim> &/*p*/,
+  debug<dim>::debug(Params &pars):InitialValues<dim>(pars)
+  {
+  }
+  
+  template <int dim>
+  void debug<dim>::point_value(const Point<dim> &/*p*/,
                                         Vector<double> &v) const
   {
     v(0)=1.0;
@@ -68,7 +142,7 @@ namespace mhd
     v(4)=5.0;
     v(5)=6.0;
     v(6)=7.0;
-    v(7)=8.0/(GAMMA-1.0)+v(1)*v(1)+v(2)*v(2)+v(3)*v(3)
+    v(7)=8.0/(this->GAMMA-1.0)+v(1)*v(1)+v(2)*v(2)+v(3)*v(3)
                         +v(4)*v(4)+v(5)*v(5)+v(6)*v(6);
     v(8)=9.0;
     v(9)=10.0;
@@ -77,70 +151,85 @@ namespace mhd
     v(11)=0.0; // eta
   }
   
- /***************************************************************************
+  /***************************************************************************
           Calculate the field according to TD paper (A&A 351, 707, 1999)
           Fill the structure with gravity-stratified plasma. 
   ***************************************************************************/
   template <int dim>
-  void InitialValues<dim>::TitovDemoulin(const Point<dim> & p,
-                                        Vector<double> &v) const
+  TitovDemoulin<dim>::TitovDemoulin(Params &pars):InitialValues<dim>(pars)
   {
+    pars.prm.enter_subsection("Simulation");
+    {      
+      pars.prm.enter_subsection("Box");
+      {
+        box[0][0]=pars.prm.get_double("x_min");
+        box[0][1]=pars.prm.get_double("y_min");
+        if (dim==3) box[0][2]=pars.prm.get_double("z_min");
+        box[1][0]=pars.prm.get_double("x_max");
+        box[1][1]=pars.prm.get_double("y_max");
+        if (dim==3) box[1][2]=pars.prm.get_double("z_max");
+      }
+      pars.prm.leave_subsection();
+    }
+    pars.prm.leave_subsection();
+    
     // plasma beta
-    const double beta=0.05;
-    const double Lg=0.0;          
+    beta=0.05;
+    Lg=0.0;          
 
-    double invLg=0.0;
+    invLg=0.0;
     if(Lg > 0.0) invLg=1.0/Lg;
     
     //======================== TD-model specific parameters
 
     // Torus winding number
-    static const double N_t=-3.0;
+    N_t=1.0;
 
     // Torus major radius
-    static const double R_t=4.0;
+    R_t=4.0;
   
     // Submerging of torus main axis in units of R_t
-    static const double d2R_t=0.5;
+    d2R_t=2.0/R_t;
 
     // Distance of magnetic charges from x=0 plane in units of R_t
-    static const double L2R_t=0.5;
+    L2R_t=2.0/R_t;
       
     
     //======================= Calculate dependent TD model parameters
 
     // Normalised magnetic charge corresponding to global equilibrium (Eq. 6)
-    double q_mag=0.25*fabs(N_t)*(log(8.0*R_t)-1.25)
+    q_mag=0.25*fabs(N_t)*(log(8.0*R_t)-1.25)
       *(1+L2R_t*L2R_t)*sqrt(1+L2R_t*L2R_t)/L2R_t;
 
     // Sign of winding: corresponds to sign of I_O in TD paper
-    double iSgn=(N_t>=0)?1.0:-1.0;
+    iSgn=(N_t>=0)?1.0:-1.0;
 
     // "Helicity" factor inside tho loop (used later in B_theta_internal calcs)
-    double heliFactor=2.0*(N_t*N_t)/(R_t*R_t);
+    heliFactor=2.0*(N_t*N_t)/(R_t*R_t);
 
 
     //======================= Parameters for plasma
 
     // The coronal/prominence temperature ratio and its inverse value.
-    static const double Tc2Tp=1.0;
-    //  double Tp2Tc=1.0/Tc2Tp;
+    Tc2Tp=1.0;
+    //  Tp2Tc=1.0/Tc2Tp;
 
     //======================= TCPR definition
 
-    // local denisty scale
-    double rho_0;
-
     // density jump half-width...
-    static const double t_rho=0.12;
+    t_rho=0.12;
     
     // ...and its inverse value
-
-    double densGrad=1.0/t_rho;
-
+    densGrad=1.0/t_rho;
+  }
+  
+  template <int dim>
+  void TitovDemoulin<dim>::point_value(const Point<dim> & p,
+                                        Vector<double> &v) const
+  {
     //========== Calculate the vector potential for I_t-generated toroidal field 
     double xx,yy,zz;
-            
+    
     xx=p[0]-(box[1][0]+box[0][0])*0.5;
     yy=p[1]-(box[1][1]+box[0][1])*0.5;
     zz=p[2]-box[0][2];
@@ -153,13 +242,13 @@ namespace mhd
     double P[6][3];
     double dP[3][3];
     
-    // calculate vector potentil in 6 close points
-    for(unsigned int i=0;i<6;i++){
+    // calculate vector potentil in 6 close points (+dx,-dx,+dy,-dy,+dz,-dz)
+    for(unsigned int i=0;i<6;++i){
       df[i][0]=df[i][1]=df[i][2]=0.0;
       df[i][int(i/2)]=double(1-2*int(i%2))*dd;
     }
     
-    for(unsigned int i=0;i<6;i++){
+    for(unsigned int i=0;i<6;++i){
       double x=xx+df[i][0];
       double y=yy+df[i][1];
       double z=zz+df[i][2];
@@ -211,7 +300,7 @@ namespace mhd
     }
     
     // calculate derivatives of vector potential
-    for(unsigned int i=0;i<3;i++){
+    for(unsigned int i=0;i<3;++i){
       dP[i][0]=(P[2*i][0]-P[2*i+1][0])*idd;
       dP[i][1]=(P[2*i][1]-P[2*i+1][1])*idd;
       dP[i][2]=(P[2*i][2]-P[2*i+1][2])*idd;
@@ -270,7 +359,7 @@ namespace mhd
       replaced by smoother rho~tgh(r_min-1) profile (TPCR-like).
     */
 
-    rho_0=0.5*(1.0-Tc2Tp)*tanh(densGrad*(r_min-1.0))+0.5*(1+Tc2Tp);
+    double rho_0=0.5*(1.0-Tc2Tp)*tanh(densGrad*(r_min-1.0))+0.5*(1+Tc2Tp);
     
     if(r_min>1.0){ // external region
 
@@ -297,7 +386,8 @@ namespace mhd
     v[5]=B_loc[1];                  // magnetic field
     v[6]=B_loc[2];
     // energy density
-    v[7]=pressure/(GAMMA-1.0)+v[4]*v[4]+v[5]*v[5]+v[6]*v[6];
+    v[7]=pressure/(this->GAMMA-1.0)+
+              v[4]*v[4]+v[5]*v[5]+v[6]*v[6];
     
     v[8]=0.0;                    
     v[9]=0.0;                          // current density
@@ -306,68 +396,10 @@ namespace mhd
     v[11]=0.0; // eta
   }
   
-  template <int dim>
-  void InitialValues<dim>::vector_value_list(const std::vector<Point<dim> > &points,
-                                              std::vector<Vector<double> >   &value_list) const
-  {
-    const unsigned int n_points = points.size();
-    for(unsigned int p=0; p<n_points; ++p)
-      (this->*vectorValue)(points[p], value_list[p]);
-  }
   
-  template <int dim>
-  InitialValues<dim>::InitialValues() : Function<dim>(Nv)
-  {
-    vectorValue=&InitialValues<dim>::mhdBlast;
-  }
-  
-  template <int dim>
-  void InitialValues<dim>::setParameters(Params &pars)
-  {
-    int initCond;
-    
-    pars.prm.enter_subsection("Simulation");
-    {
-      initCond=pars.prm.get_integer("Initial condition");
-      GAMMA=pars.prm.get_double("gamma");
-      ETApar1=pars.prm.get_double("eta param 1");
-      ETApar2=pars.prm.get_double("eta param 2");
-      
-      pars.prm.enter_subsection("Box");
-      {
-        box[0][0]=pars.prm.get_double("x_min");
-        box[0][1]=pars.prm.get_double("y_min");
-        if (dim==3) box[0][2]=pars.prm.get_double("z_min");
-        box[1][0]=pars.prm.get_double("x_max");
-        box[1][1]=pars.prm.get_double("y_max");
-        if (dim==3) box[1][2]=pars.prm.get_double("z_max");
-      }
-      pars.prm.leave_subsection();
-    }
-    pars.prm.leave_subsection();
-    
-    switch(initCond){
-      case 0:
-        vectorValue=&InitialValues<dim>::mhdBlast;
-        break;
-      case 1:
-        vectorValue=&InitialValues<dim>::harris;
-        break;
-      case 2:
-        vectorValue=&InitialValues<dim>::TitovDemoulin;
-        break;
-      case 3:
-        vectorValue=&InitialValues<dim>::debug;
-        break;
-    }
-  }
-  
-  template <int dim>
-  void InitialValues<dim>::vector_value(const Point<dim> &point, Vector<double>&value) const
-  {
-    (this->*vectorValue)(point, value);
-  }
-  
+  /***************************************************************************
+          Projection of initial condition
+  ***************************************************************************/
   template <int dim>
   void MHDProblem<dim>::project_initial_conditions()
   {
@@ -390,7 +422,7 @@ namespace mhd
     for(; cell!=endc; ++cell)
       if(cell->is_locally_owned()){
           fe_values.reinit(cell);
-          initial_values.vector_value_list(fe_values.get_quadrature_points(),
+          initial_values->vector_value_list(fe_values.get_quadrature_points(),
                                           rhs_values);
           cell_rhs = 0;
           cell_matrix = 0;
@@ -465,7 +497,7 @@ namespace mhd
     for(; cell!=endc; ++cell)
       if(cell->is_locally_owned()){
           fe_values.reinit(cell);
-          initial_values.vector_value_list(fe_values.get_quadrature_points(),
+          initial_values->vector_value_list(fe_values.get_quadrature_points(),
                                           rhs_values);
           cell_rhs = 0;
           cell_matrix = 0;

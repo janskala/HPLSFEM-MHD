@@ -76,6 +76,7 @@ namespace mhd
     dof_handler.clear();
     //dof_handler_s.clear();
     delete [] operator_matrixes;
+    delete initial_values;
     delete [] DIRK;
     delete mhdeq;
   }
@@ -83,6 +84,8 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::setup_parameters(Params &pars)
   {
+    int initCond;
+    
     pcout<<"Element degree: "<<fe.degree<<std::endl;
     
     pcout<<"Parsing parameters"<<std::endl;
@@ -120,6 +123,8 @@ namespace mhd
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Simulation");
     {
+      initCond=pars.prm.get_integer("Initial condition");
+      
       pars.prm.enter_subsection("Box");
       {
         boxP1[0]=pars.prm.get_double("x_min");
@@ -135,7 +140,20 @@ namespace mhd
     
     pars.setBC(&BCmap[0]);  // sets kind of BC for six box sides
     
-    initial_values.setParameters(pars);
+    switch(initCond){
+      case 0:
+        initial_values=new mhdBlast<dim>(pars);
+        break;
+      case 1:
+        initial_values=new harris<dim>(pars);
+        break;
+      case 2:
+        initial_values=new TitovDemoulin<dim>(pars);
+        break;
+      case 3:
+        initial_values=new debug<dim>(pars);
+        break;
+    }
     
     mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
     mhdeq->setBoxRef(&boxP1,&boxP2);
@@ -478,7 +496,7 @@ namespace mhd
                 
                 mhdeq->rhs.vector_value_list(fe_face_values.get_quadrature_points(),
                                             rhs_values);
-                initial_values.vector_value_list(fe_face_values.get_quadrature_points(),
+                initial_values->vector_value_list(fe_face_values.get_quadrature_points(),
                                             init_values);
                 
                 for(unsigned int q_point=0; q_point<n_f_q_points; ++q_point){

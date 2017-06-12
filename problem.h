@@ -144,7 +144,7 @@ namespace mhd
     TimerOutput          computing_timer;
 #endif   
     MHDequations<dim>*   mhdeq;
-    InitialValues<dim>   initial_values;
+    InitialValues<dim>*  initial_values;
     
     int                  BCmap[6]; 
     Point<dim>           boxP1,boxP2;  // Box definition
