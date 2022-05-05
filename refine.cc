@@ -1,5 +1,7 @@
 #include "problem.h"
 
+#include <algorithm>
+
 namespace mhd
 {
 
@@ -13,7 +15,7 @@ namespace mhd
     Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
     KellyErrorEstimator<dim>::estimate(dof_handler,
                                         QGauss<dim-1>(fe.degree+1),
-                                        typename FunctionMap<dim>::type(),
+                                        {},
                                         distributed_solution,
                                         estimated_error_per_cell);
      parallel::distributed::GridRefinement::
@@ -94,14 +96,10 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "set Shock Smooth Coef");
 #endif
-    float locShockIndx[Nv], locMean[Nv], max[Nv], min[Nv], grad;
+    double max[Nv], min[Nv];
     
     QGaussLobatto<dim> quadrature(FEO+1);// QGaussLobatto<dim>  -- qps are in interpolation points
-    //QGauss<dim-1> face_quadrature_formula(FEO+1);
     FEValues<dim> fe_values(fe, quadrature, update_values | update_gradients | update_quadrature_points);
-    /*FEFaceValues<dim> fe_face_values(fe, face_quadrature_formula,
-                                  update_values | update_gradients | update_quadrature_points |
-                                  update_normal_vectors);*/
     
     const unsigned int n_q_points    = fe_values.n_quadrature_points;
     //const unsigned int n_f_q_points  = face_quadrature_formula.size();
@@ -109,68 +107,39 @@ namespace mhd
     std::vector<Vector<double> > values(n_q_points, Vector<double>(Nv));
     std::vector<std::vector<Tensor<1,dim> > >  gadients(n_q_points,
                                         std::vector<Tensor<1,dim> > (Nv));
-    /*std::vector<Vector<double> > fvalues(n_f_q_points, Vector<double>(Ne));
-    std::vector<std::vector<Tensor<1,dim> > >  fgadients(n_f_q_points,
-                                        std::vector<Tensor<1,dim> > (Nv));*/
     
     typename DoFHandler<dim>::active_cell_iterator
     cell = dof_handler.begin_active(),
     endc = dof_handler.end();
     unsigned int cellNo=0;
     for(; cell!=endc; ++cell,++cellNo)
-      if(cell->is_locally_owned()){
-        /*for (unsigned int face=0; face<GeometryInfo<dim>::faces_per_cell; ++face){
-          fe_face_values.reinit(cells, face);
-              
-          fe_face_values.get_function_values(solution, fvalues);
-          fe_face_values.get_function_gradients(solution, fgadients);
-          
-          for(unsigned int q_point=0; q_point<n_f_q_points; ++q_point){
-          }
-        }*/
-        // std::cout<<triangulation.locally_owned_subdomain()<<" start proj "<<cellNo<<std::endl;
-        fe_values.reinit(cell);
-        
-        fe_values.get_function_values(solution, values);
-        fe_values.get_function_gradients(solution, gadients);
-        
-        for(unsigned int l=0; l<Nv; l++){
-          /*locShockIndx[l]= */locMean[l]=max[l]=-9e99;
-          min[l]=9e99;
-        }
-        
-        for(unsigned int point=0; point<n_q_points; ++point)
-          for(unsigned int l=1; l<Nv; l++){
-            locMean[l]+=values[point][l];
-            if (values[point][l]>max[l]) max[l]=values[point][l];
-            if (values[point][l]<min[l]) min[l]=values[point][l];
-          }
-            
-        //for(unsigned int point=0; point<n_q_points; ++point){
-          // integrate gradients over cell for shock recognition
-          for(unsigned int l=1; l<Nv; l++){
-              //grad=values[point][l]-locMean[l]/n_q_points;
-              grad=max[l]-min[l];
-              locShockIndx[l]=std::fabs(grad);
-          }
-        //}
+        if(cell->is_locally_owned()){
+            fe_values.reinit(cell);
 
-        // find the greatest gradient
-        grad=-9e99;
-        for(unsigned int l=1; l<Nv; l++){
-          if (locShockIndx[l]<1e-8) locShockIndx[l]=1e-8;
-          double hlp=std::sqrt(locShockIndx[l]); // /std::pow(cell->diameter(),dim)
-          
-          //if (hlp<1.0) hlp=1.0; // for smooth region
-          if (hlp>50.0) hlp=50.0; // remove extrema
-          if (hlp>grad) grad=hlp; // maximum on cell
+            fe_values.get_function_values(solution, values);
+            fe_values.get_function_gradients(solution, gadients);
+
+            for(unsigned int l=4; l<7; l++){ // Only B is used for max-grad
+                max[l]=-9e99;
+                min[l]=9e99;
+            } 
+
+            for(unsigned int point=0; point<n_q_points; ++point)
+                for(unsigned int l=4; l<7; l++){
+                    min[l]=std::min(min[l],values[point][l]);
+                    max[l]=std::max(max[l],values[point][l]);
+                }
+
+            float grad=-9e99;
+            for(unsigned int l=4; l<7; l++){
+                double hlp=std::sqrt(std::fabs(max[l]-min[l]));
+                hlp=std::max(1e-8,hlp);
+                hlp=std::min(hlp,50.0);
+                if (hlp>grad) grad=hlp; // maximum on cell
+            }
+
+            shockIndicator[cellNo]=grad;
         }
-        // shock indicator is given by average value of gradient on the cell
-        //if (grad>1)
-//         std::cout<<triangulation.locally_owned_subdomain()<<" cellNo: "<<cellNo
-//                  <<", g="<<grad<<" d="<<cell->diameter()<<std::endl;
-        shockIndicator[cellNo]=grad;
-      }
   }
 
 } // end of namespace mhd

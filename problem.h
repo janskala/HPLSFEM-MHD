@@ -14,15 +14,18 @@
 #include <deal.II/distributed/grid_refinement.h>
 #include <deal.II/distributed/solution_transfer.h>
 
-#define USE_PETSC_LA
 namespace LA
 {
-#ifdef USE_PETSC_LA
-  using namespace dealii::PETScWrappers;
+#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) && \
+  !(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
+  using namespace dealii::LinearAlgebraPETSc;
+#  define USE_PETSC_LA
+#elif defined(DEAL_II_WITH_TRILINOS)
+  using namespace dealii::LinearAlgebraTrilinos;
 #else
-  using namespace dealii::TrilinosWrappers;
+#  error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
 #endif
-}
+} // namespace LA
 
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
@@ -30,14 +33,18 @@ namespace LA
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/solver_cg.h>
-#include <deal.II/lac/constraint_matrix.h>
+//#include <deal.II/lac/constraint_matrix.h>
+#include <deal.II/lac/affine_constraints.h>
 //#include <deal.II/lac/compressed_simple_sparsity_pattern.h>
 #include <deal.II/lac/sparsity_tools.h>
 
-#include <deal.II/lac/petsc_parallel_sparse_matrix.h>
-#include <deal.II/lac/petsc_parallel_vector.h>
+//#include <deal.II/lac/petsc_parallel_sparse_matrix.h>
+#include <deal.II/lac/petsc_sparse_matrix.h>
+//#include <deal.II/lac/petsc_parallel_vector.h>
+#include <deal.II/lac/petsc_vector.h>
 #include <deal.II/lac/petsc_solver.h>
 #include <deal.II/lac/petsc_precondition.h>
+#include <deal.II/lac/trilinos_precondition.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -105,7 +112,8 @@ namespace mhd
     FESystem<dim>        fe;
 //     FE_Q<dim>            fes;  // FE for single variable
 
-    ConstraintMatrix     constraints;
+     AffineConstraints<double> constraints;
+    //ConstraintMatrix     constraints;
     
     FullMatrix<double>*  operator_matrixes;
     std::vector<Vector<double> >*  DIRKv;
@@ -116,11 +124,7 @@ namespace mhd
 //     IndexSet             local_dofs;  // eta dofs
 //     IndexSet             local_relevant_dofs;  // eta
 
-#ifdef USE_PETSC_LA
-  LA::MPI::SparseMatrix   system_matrix;
-#else
-  LA::SparseMatrix        system_matrix;
-#endif
+    LA::MPI::SparseMatrix   system_matrix;
 
     LA::MPI::Vector*      DIRK;  // Diagonal Implicit Runge-Kutta y_1 ... y_4 (up to 4th stage)
     LA::MPI::Vector       solution;

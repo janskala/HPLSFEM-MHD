@@ -24,7 +24,8 @@ namespace mhd
     values(8) = 0.0;  // J
     values(9) = 0.0;
     values(10) = 0.0;
-    values(11) = 0.0; // div B
+    values(11) = 0.0; // eta
+    values(12) = 0.0; // div B
   }
 
 
@@ -44,8 +45,9 @@ namespace mhd
   {
     newdt=dt=1e-6;
     vmax=0.0;
+    ETAmax=1e-8;
     time=nullptr;
-    boxP1=boxP1=nullptr;
+    boxP1=boxP2=nullptr;
     
     for(unsigned int i=0;i<Ne;i++){
 //       Flx[0][i]=Flx[1][i]=Flx[2][i]=0.0;
@@ -104,10 +106,10 @@ namespace mhd
     // default time integration method is theta scheme
     setThetaMethod();
     
-    for(unsigned int i=0;i<5;i++)
-      for(unsigned int j=0;j<DIRK.maxStageAll;j++){
+    for(int i=0;i<5;i++)
+      for(size_t j=0;j<DIRK.maxStageAll;j++){
         DIRK.tau[i][j]=0.0;
-        for(unsigned int k=0;k<DIRK.maxStageAll+1;k++)
+        for(size_t k=0;k<DIRK.maxStageAll+1;k++)
           DIRK.ab[i][k][j]=0.0;
     }
     // DIRK(1,2)
@@ -358,6 +360,9 @@ namespace mhd
     if ((V[1][7]-buf)<pc){
       V[1][7]=buf+pc;
     }
+
+    // set resistivity
+    V[1][11]=(this->*setEta)(1);
     
     checkDt();
   }
@@ -392,8 +397,8 @@ namespace mhd
         for(unsigned int l=0;l<Nv;l++)
           O[i](k,l)=0.0;
       // diagonal part 1
-      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i];
       for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=fev[l][i];
+      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i];
         
       // add gravity terms
       O[i](1,0)-=gravity[0]*thdt*fev[0][i];
@@ -440,12 +445,13 @@ namespace mhd
       sum[k]=sum2[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
-      
+    
+    // linearization term dt*\theta*\pard{A^k_i}{x_i} * \Psi^k
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
           sum2[k]+=B[k][l]*V[1][l];
-    
+    // old time term dt*(1-\theta)*\pard{F_i}{x_i}
     for(unsigned int d=0;d<dim;d++)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
@@ -487,7 +493,7 @@ namespace mhd
 
     F[11]=dt*(this->*setEta)(0);
     
-    for(unsigned int l=0;l<DIRK.stage;l++){
+    for(int l=0;l<DIRK.stage;l++){
       int lStage=2+l;
       JacobiM(V[lStage]);
       
@@ -513,7 +519,7 @@ namespace mhd
     
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
     
-    for(unsigned int l=0;l<=DIRK.stage;l++){
+    for(int l=0;l<=DIRK.stage;l++){
       int lStage=2+l;
       JacobiM(V[lStage]);
       
@@ -541,11 +547,11 @@ namespace mhd
       F[11]+=dcf*(this->*setEta)(lStage); // resistivity
     }
   }
-  
+ /* 
   template <int dim>
   bool MHDequations<dim>::checkOverflow(LA::MPI::Vector &v, LA::MPI::Vector &o)
   {
-    /*double Uk,Um,buf,pc=1e-4/(GAMMA-1.0),rhs,rhc=1e-1;
+    double Uk,Um,buf,pc=1e-4/(GAMMA-1.0),rhs,rhc=1e-1;
     int overflow=0;
     std::pair<types::global_dof_index, types::global_dof_index> range=v.local_range();
     for(unsigned int i=range.first;i<range.second;i+=Nv){
@@ -588,14 +594,14 @@ namespace mhd
     
     overflow=Utilities::MPI::max(overflow,mpi_communicator);
     v.compress(VectorOperation::insert);  // write changes in parallel vector
-    return overflow!=0;*/
+    return overflow!=0;
     return false;
-  }
-  
+  }*/
+ /* 
   template <int dim>
   void MHDequations<dim>::checkDt(LA::MPI::Vector &v)
   {
-    /*double buf,p,a,vlc,cf,B2,iRh,iRh2;
+    double buf,p,a,vlc,cf,B2,iRh,iRh2;
     
     newdt=1e99;
     vmax=0.0;
@@ -631,8 +637,7 @@ namespace mhd
 
     newdt=Utilities::MPI::min(newdt,mpi_communicator);
     vmax=Utilities::MPI::max(vmax,mpi_communicator);
-*/
-  }
+  }*/
   
   template <int dim>
   void MHDequations<dim>::checkDt()

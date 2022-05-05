@@ -246,7 +246,7 @@ namespace mhd
     DoFTools::make_sparsity_pattern(dof_handler, sparsity_pattern,
                                    constraints, false);
     SparsityTools::distribute_sparsity_pattern(sparsity_pattern,
-                                              dof_handler.n_locally_owned_dofs_per_processor(),
+                                              dof_handler.locally_owned_dofs(),
                                               mpi_communicator,
                                               locally_relevant_dofs);
     system_matrix.reinit(locally_owned_dofs,
@@ -478,7 +478,6 @@ namespace mhd
 
             } // end of i-loop
           }   // end of q-points
-
           // Boundary conditions
           for (unsigned int face_number=0; face_number<GeometryInfo<dim>::faces_per_cell; ++face_number)
             if (cell->face(face_number)->at_boundary() && !mhdeq->isDiagonal()){
@@ -574,8 +573,8 @@ namespace mhd
     //LA::MPI::PreconditionAMG preconditioner;
     //LA::MPI::PreconditionAMG::AdditionalData data;
     
-    LA::PreconditionJacobi preconditioner;
-    LA::PreconditionJacobi::AdditionalData data;
+    LA::MPI::PreconditionJacobi preconditioner;
+    LA::MPI::PreconditionJacobi::AdditionalData data;
 #ifdef USE_PETSC_LA
     //data.symmetric_operator = true;
 #else
@@ -597,7 +596,7 @@ namespace mhd
   {
     unsigned int sitr,output_counter=0;
     unsigned int time_step=0;
-    unsigned int iter,linReset;
+    unsigned int iter/*,linReset*/;
 //     double lastErr,err;
     //bool overflow=false;
     double sz[dim],maxSiz=0.0;
@@ -707,7 +706,7 @@ namespace mhd
 
         if (output_counter*outputFreq<=time){
             pcout << output_counter << ". output" << std::endl;
-            setShockSmoothCoef(); // set refinement coeficients
+            //setShockSmoothCoef(); // set refinement coeficients
             output_results(output_counter++);
         }
 
@@ -803,6 +802,7 @@ namespace mhd
   void MHDProblem<dim>::corrections()
   {
     double RHSvalue,Uk,Um,buf;
+    double *weights=mhdeq->getWeights();
     QGaussLobatto<dim> quadrature(FEO+gausIntOrd);// QGaussLobatto<dim>  -- qps are in interpolation points
     FEValues<dim> fe_values(fe, quadrature,
                              update_values   | //update_gradients |
@@ -843,7 +843,7 @@ namespace mhd
                   
                   cell_matrix(dof_i,dof_j) += fe_values.shape_value_component(dof_i,p,k)*
                                     fe_values.shape_value_component(dof_j,p,k)*
-                                    fe_values.JxW(p);
+                                    weights[k]*fe_values.JxW(p);
                 }
               }
               for(unsigned int k=0; k<Nv; k++){      // Check values for underflow (density and pressue)
@@ -852,7 +852,7 @@ namespace mhd
                 switch(k){
                   case 0:  // density
                     RHSvalue=lv[p][k];
-                    if (RHSvalue<0.25) RHSvalue=0.25;
+                    if (RHSvalue<0.1) RHSvalue=0.1;
                     break;
                   case 7:  // pressure
                     RHSvalue=lv[p][k];
@@ -870,14 +870,19 @@ namespace mhd
 //                   case 8:
 //                   case 9:
 //                   case 10:
-//                   case 11:
+                  case 11:
+                    if (lv[p][k]<0.0)
+                        RHSvalue=0.0;
+                    else
+                        RHSvalue=lv[p][k];
+                    break;
                   default:
                     RHSvalue=lv[p][k];
                   break;
                 }
                 cell_rhs(dof_i) += RHSvalue*
                                   fe_values.shape_value_component(dof_i,p,k)*
-                                  fe_values.JxW(p);
+                                  weights[k]*fe_values.JxW(p);
               }
 
             } // end of i-loop

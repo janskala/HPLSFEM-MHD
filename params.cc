@@ -15,7 +15,7 @@ namespace mhd
         "    ./HPLSFEM [-p parameter_file] [-h]\n"
         "\n"
         "Parameter sequences in brackets can be omitted. If the parameter file\n"
-        "is not specifed then default name params.ini is used.\n"
+        "is not specifed then default name params.prm is used.\n"
         "\n"
         "The parameter file has the following format and allows the following\n"
         "values(you can cut and paste this and use it for your own parameter\n"
@@ -270,7 +270,7 @@ namespace mhd
   
   Params::Params(const int argc, char *const *argv)
   {
-    std::string paramFile("params.ini");
+    std::string paramFile("params.prm");
     
     declare_parameters();
     

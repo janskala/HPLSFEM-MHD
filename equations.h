@@ -6,15 +6,18 @@
 #include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/lac/generic_linear_algebra.h>
 
-#define USE_PETSC_LA
 namespace LA
 {
-#ifdef USE_PETSC_LA
-  using namespace dealii::PETScWrappers;
+#if defined(DEAL_II_WITH_PETSC) && !defined(DEAL_II_PETSC_WITH_COMPLEX) && \
+  !(defined(DEAL_II_WITH_TRILINOS) && defined(FORCE_USE_OF_TRILINOS))
+  using namespace dealii::LinearAlgebraPETSc;
+#  define USE_PETSC_LA
+#elif defined(DEAL_II_WITH_TRILINOS)
+  using namespace dealii::LinearAlgebraTrilinos;
 #else
-  using namespace dealii::TrilinosWrappers;
+#  error DEAL_II_WITH_PETSC or DEAL_II_WITH_TRILINOS required
 #endif
-}
+} // namespace LA
 
 #include "params.h"
 
@@ -72,8 +75,8 @@ namespace mhd
     void JacobiM(double v[]);
     void dxA(double v[], double dv[][Nv]);
 //     void fluxes(double v[]);
-    bool checkOverflow(LA::MPI::Vector&, LA::MPI::Vector&);
-    void checkDt(LA::MPI::Vector&);
+//    bool checkOverflow(LA::MPI::Vector&, LA::MPI::Vector&);
+//    void checkDt(LA::MPI::Vector&);
     void checkDt();
     void setNewDt();
     double* getWeights();

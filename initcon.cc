@@ -339,7 +339,7 @@ namespace mhd
     double cf1=q_mag/(rp*rp*rp);
     double cf2=q_mag/(rm*rm*rm);
     Vector<double> B_loc(3);//=cf1*r_plus-cf2*r_minus;
-    B_loc.sadd(0.0,cf1,r_plus,-cf2,r_minus);
+    B_loc.add(cf1,r_plus,-cf2,r_minus);
  
     // add vector potential part B = curl A
     B_loc[0]+=dP[1][2]-dP[2][1];
@@ -365,14 +365,14 @@ namespace mhd
 
       v[0]=rho_0*exp(-zz*invLg);         // mass density outside
       
-      B_loc.sadd(1.0,iSgn*R_t/r_maj,theta0);
+      B_loc.add(iSgn*R_t/r_maj,theta0);
 
       pressure=beta*exp(-zz*invLg);
     }else{ // inside the torus
 
       v[0]=rho_0*exp(-zz*Tc2Tp*invLg);   // mass density in the loop
 
-      B_loc.sadd(1.0,(iSgn*(sqrt(1.0+heliFactor*(1.0-r_min*r_min))+
+      B_loc.add((iSgn*(sqrt(1.0+heliFactor*(1.0-r_min*r_min))+
                     R_t/r_maj-1.0)),theta0);
 
       pressure=beta*exp(-zz*invLg);
@@ -471,7 +471,6 @@ namespace mhd
   template <int dim>
   void MHDProblem<dim>::project_init_cnd_vecpot()
   {
-    double RHS;
     QGauss<dim>quadrature(FEO+gausIntOrd);// QGaussLobatto<dim>  -- qps are in interpolation points
     FEValues<dim> fe_values(fe, quadrature,
                              update_values   | update_gradients |
