@@ -41,7 +41,7 @@ namespace mhd
   class MHDequations
   {
   public:
-    MHDequations(Params&, mapDoFs&, MPI_Comm);
+    MHDequations(Params&, MPI_Comm);
     ~MHDequations();
     
     struct{
@@ -65,9 +65,9 @@ namespace mhd
     void setFEvals(const FEValues<dim>&, const unsigned int);
     void setFEvals(const FEFaceValues<dim>&, const unsigned int);
     
-    void calucate_matrix_rhs(FullMatrix<double> *, Vector<double>&);
-    void set_operators_full(FullMatrix<double> *);
-    void set_operators_diag(FullMatrix<double> *);
+    void calucate_matrix_rhs(std::vector<FullMatrix<double>>&, Vector<double>&);
+    void set_operators_full(std::vector<FullMatrix<double>>&);
+    void set_operators_diag(std::vector<FullMatrix<double>>&);
     void set_rhs_theta(Vector<double>&);
     void set_rhs_DIRK(Vector<double>&);
     void set_rhs_DIRK_last(Vector<double>&);
@@ -135,7 +135,7 @@ namespace mhd
                     const Point<dim>&,     // point
                   const unsigned int); // qp
   
-    void reinitFEval();
+    void reinitFEval(const unsigned int);
     
     // RHS of MHD equations
     class RightHandSide :  public Function<dim>
@@ -154,10 +154,10 @@ namespace mhd
   private:
     MPI_Comm            mpi_communicator;
     
-    double               A[3][Ne][Nv];
-    double               B[Ne][Nv];
-    double               V[2+3][Nv];
-    double               G[2+3][3][Nv];
+    double               A[3][Ne][Nv]; // Jacobi matrix from fluxes Fx, Fy and Fz
+    double               B[Ne][Nv];    // \sum_i dA_i/dx_i
+    double               V[2+3][Nv];   // prev state vectors \Psi 0:(t-1), 1:(lin), 2..4:DIRK
+    double               G[2+3][3][Nv];// d\Psi/dx_i
     double               *fev[Nv],*feg[3][Nv];
     double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0,1e-0, 1e0,1e0};
     
@@ -181,10 +181,8 @@ namespace mhd
     bool          NRLinBck;            // Used in DIRK for backup NRLin in last part of DIRK
     bool          diagonal;            // when DIRK is evaluating new values then use diagonal matrix
     
-    mapDoFs&      stv2dof;
-    
-    typedef void (MHDequations::*p2clcMat)(FullMatrix<double> *);
-    p2clcMat clcMat;
+    typedef void (MHDequations::*r2clcMat)(std::vector<FullMatrix<double>>&);
+    r2clcMat clcMat;
     typedef void (MHDequations::*p2clcRhs)(Vector<double>&);
     p2clcRhs clcRhs;
     

@@ -40,8 +40,8 @@ namespace mhd
   
   // Implementation of the body of MHDequations
   template <int dim>
-  MHDequations<dim>::MHDequations(Params &pars, mapDoFs &stvdof, MPI_Comm comm) : 
-                                  mpi_communicator(comm), stv2dof(stvdof)
+  MHDequations<dim>::MHDequations(Params &pars, MPI_Comm comm) : 
+                                  mpi_communicator(comm)
   {
     newdt=dt=1e-6;
     vmax=0.0;
@@ -179,12 +179,12 @@ namespace mhd
     for(unsigned int i=0;i<Nv;i++){
       delete [] fev[i];
       for(unsigned int d=0;d<3;d++)
-        delete [] feg[d][i];;
+        delete [] feg[d][i];
     }
   }
   
   template <int dim>
-  void MHDequations<dim>::reinitFEval()
+  void MHDequations<dim>::reinitFEval(const unsigned int n_dofs_per_cell)
   {
     for(unsigned int i=0;i<Nv;i++){
       delete [] fev[i];
@@ -193,9 +193,9 @@ namespace mhd
     }
     
     for(unsigned int i=0;i<Nv;i++){
-      fev[i] = new double[stv2dof.Nstv];
+      fev[i] = new double[n_dofs_per_cell];
       for(unsigned int d=0;d<dim;d++)
-        feg[d][i] = new double[stv2dof.Nstv];
+        feg[d][i] = new double[n_dofs_per_cell];
     }
   }
   
@@ -285,20 +285,13 @@ namespace mhd
   void MHDequations<dim>::setFEvals(const FEFaceValues<dim> &fv,
                                     const unsigned int qp)
   {
-    for(unsigned int i=0;i<stv2dof.Nstv;i++)   // over the state vectors
+    for(unsigned int i=0;i<fv.dofs_per_cell;i++)   // over the state vectors
       for(unsigned int j=0;j<Nv;j++){          // over the variables
-        int dof=stv2dof.stateD[i][j];
-        if (dof>=0){
-          fev[j][i]=fv.shape_value_component(dof,qp,j);
+          fev[j][i]=fv.shape_value_component(i,qp,j);
           for(unsigned int d=0;d<dim;d++)
             if (std::fabs(fv.normal_vector(qp)[d])<0.5)
-              feg[d][j][i] = fv.shape_grad_component(dof,qp,j)[d];
+              feg[d][j][i] = fv.shape_grad_component(i,qp,j)[d];
             else feg[d][j][i] = 0.0;
-        }else{
-          fev[j][i]=0.0;
-          for(unsigned int d=0;d<dim;d++)
-            feg[d][j][i] = 0.0;
-        }
       }
   }
   
@@ -306,17 +299,11 @@ namespace mhd
   void MHDequations<dim>::setFEvals(const FEValues<dim> &fv,
                                     const unsigned int qp)
   {
-    for(unsigned int i=0;i<stv2dof.Nstv;i++)   // over the state vectors
+    for(unsigned int i=0;i<fv.dofs_per_cell;i++){   // over the state vectors
       for(unsigned int j=0;j<Nv;j++){          // over the variables
-        int dof=stv2dof.stateD[i][j];
-        if (dof>=0){
-          fev[j][i]=fv.shape_value_component(dof,qp,j);
+          fev[j][i]=fv.shape_value_component(i,qp,j);
           for(unsigned int d=0;d<dim;d++)
-            feg[d][j][i] = fv.shape_grad_component(dof,qp,j)[d];
-        }else{
-          fev[j][i]=0.0;
-          for(unsigned int d=0;d<dim;d++)
-            feg[d][j][i] = 0.0;
+            feg[d][j][i] = fv.shape_grad_component(i,qp,j)[d];
         }
       }
   }
@@ -362,25 +349,27 @@ namespace mhd
     }
 
     // set resistivity
-    V[1][11]=(this->*setEta)(1);
+    V[0][11]=(this->*setEta)(0); // old time step values
+    for(int k = 1; k <= 2+DIRK.stage; k++)
+        V[k][11]=V[0][11];
     
     checkDt();
   }
   
   template <int dim>
-  void MHDequations<dim>::calucate_matrix_rhs(FullMatrix<double> *O, Vector<double> &F)
+  void MHDequations<dim>::calucate_matrix_rhs(std::vector<FullMatrix<double>>& O, Vector<double> &F)
   {
     (this->*clcMat)(O);
     (this->*clcRhs)(F);
   }
   
   template <int dim>
-  void MHDequations<dim>::set_operators_full(FullMatrix<double> *O)
+  void MHDequations<dim>::set_operators_full(std::vector<FullMatrix<double>>& O)
   {
     JacobiM(V[1]);
     if (NRLin) dxA(V[1],G[1]);
     
-    for(unsigned int i=0;i<stv2dof.Nstv;i++){
+    for(unsigned int i=0;i<O.size();i++){
       double thdt=theta*dt;
           
       // operator part: sum_i dA_i/dx_i
@@ -398,7 +387,7 @@ namespace mhd
           O[i](k,l)=0.0;
       // diagonal part 1
       for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=fev[l][i];
-      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i];
+      for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i]; // J_i and \eta
         
       // add gravity terms
       O[i](1,0)-=gravity[0]*thdt*fev[0][i];
@@ -421,9 +410,9 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDequations<dim>::set_operators_diag(FullMatrix<double> *O)
+  void MHDequations<dim>::set_operators_diag(std::vector<FullMatrix<double>>& O)
   {
-    for(unsigned int i=0;i<stv2dof.Nstv;i++){
+    for(unsigned int i=0;i<O.size();i++){
 
       for(unsigned int k=0;k<Ne;k++)
         for(unsigned int l=0;l<Nv;l++)
@@ -468,9 +457,9 @@ namespace mhd
     F[3]+=gravity[2]*V[0][0]*dtoth;
     F[7]+=dtoth*(gravity[0]*V[0][1]+gravity[1]*V[0][2]+gravity[2]*V[0][3]);
 
-    F[11]=dt*(this->*setEta)(0);  // calculate it from old time values
+    F[11]=dt*V[0][11];//(this->*setEta)(0);  // calculate it from old time values
   }
-  
+   
   template <int dim>
   void MHDequations<dim>::set_rhs_DIRK(Vector<double> &F)
   {
@@ -491,7 +480,7 @@ namespace mhd
     for(unsigned int k=0;k<Nt;k++)
       F[k]-=dtth*sum[k];
 
-    F[11]=dt*(this->*setEta)(0);
+    //F[11]=dt*V[0][11];//(this->*setEta)(0);
     
     for(int l=0;l<DIRK.stage;l++){
       int lStage=2+l;
@@ -544,7 +533,7 @@ namespace mhd
       F[8]+= dcf*V[lStage][8];  // current density
       F[9]+= dcf*V[lStage][9];
       F[10]+=dcf*V[lStage][10];
-      F[11]+=dcf*(this->*setEta)(lStage); // resistivity
+      //F[11]+=dcf*V[0][11];//(this->*setEta)(0);//(lStage); // resistivity
     }
   }
  /* 
@@ -647,7 +636,7 @@ namespace mhd
     newdt=1e99;
     vmax=0.0;
     
-    iRh=1.0/V[0][0];
+    iRh=1.0/V[1][0];
     iRh2=iRh*iRh;
     B2=V[1][4]*V[1][4]+V[1][5]*V[1][5]+V[1][6]*V[1][6];
     buf=(V[1][1]*V[1][1]+V[1][2]*V[1][2]+V[1][3]*V[1][3])*iRh+B2;
@@ -670,7 +659,7 @@ namespace mhd
     vlc=sqrt(buf); // fast magnetoacustic wave speed
     buf = CFL*hmin/vlc;
     if (buf<newdt) newdt = buf;  // use minimum dt
-    buf = CFL*hmin*hmin/(8.0*ETAmax);
+    buf = CFL*hmin*hmin/(12.0*ETAmax);  // 8 is orig
     if (buf<newdt) newdt = buf;  // use minimum dt for resistivity
     if (vlc>vmax) vmax=vlc;
 

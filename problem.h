@@ -99,7 +99,6 @@ namespace mhd
     void project_init_cnd_vecpot();     // implemented in initcon.cc
     void corrections();
     void void_step();
-    void setDofMapping();
 
     MPI_Comm             mpi_communicator;
     
@@ -115,7 +114,7 @@ namespace mhd
      AffineConstraints<double> constraints;
     //ConstraintMatrix     constraints;
     
-    FullMatrix<double>*  operator_matrixes;
+    std::vector<FullMatrix<double>>  operator_matrixes;
     std::vector<Vector<double> >*  DIRKv;
     std::vector<std::vector<Tensor<1,dim> > >*  DIRKg;
     
@@ -170,8 +169,6 @@ namespace mhd
     unsigned int intMethod;
     unsigned int gausIntOrd;
     unsigned int initCond;
-    
-    mapDoFs stv2dof;    // state vectors to the dofs and dofs to state vectors
     
     //class Postprocessor;  // the derived quatities for output
   };

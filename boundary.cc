@@ -41,7 +41,7 @@ namespace mhd
     for(int k = 0; k <= 2+DIRK.stage; k++)
       for (unsigned int i = 0; i < Nv; i++)
         V[k][i] = (*Vqp[k])[qp](i);
-    
+   /* 
     double cf=0.9;
     V[0][1]*=cf;
     V[0][2]*=cf;
@@ -54,7 +54,7 @@ namespace mhd
       V[1][1]*=cf;
       V[1][2]*=cf;
       V[1][3]*=cf;
-    }
+    }*/
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
       for(unsigned int j = 0; j < dim; j++)

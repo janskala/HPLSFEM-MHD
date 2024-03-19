@@ -429,25 +429,19 @@ namespace mhd
           
           for(unsigned int point=0; point<n_q_points; ++point){
             
-            for(unsigned int i=0; i<stv2dof.Nstv; i++){
-              for(unsigned int j=0; j<stv2dof.Nstv; j++){
+            for(unsigned int i=0; i<fe.dofs_per_cell; i++){
+              for(unsigned int j=0; j<fe.dofs_per_cell; j++){
                 for(unsigned int k=0; k<Nv; k++){
-                  const int dof_i=stv2dof.stateD[i][k];
-                  if (dof_i<0) continue;
-                  const int dof_j=stv2dof.stateD[j][k];
-                  if (dof_j<0) continue;
-                  cell_matrix(dof_i,dof_j) +=
-                        fe_values.shape_value_component(dof_i,point,k)*
-                        fe_values.shape_value_component(dof_j,point,k)*
+                  cell_matrix(i,j) +=
+                        fe_values.shape_value_component(i,point,k)*
+                        fe_values.shape_value_component(j,point,k)*
                         fe_values.JxW(point);
                 }
               }
               // Assembling the right hand side
               for(unsigned int k=0; k<Nv; k++){
-                const int dof_i=stv2dof.stateD[i][k];
-                if (dof_i<0) continue;
-                cell_rhs(dof_i) += rhs_values[point][k]*
-                    fe_values.shape_value_component(dof_i,point,k)*
+                cell_rhs(i) += rhs_values[point][k]*
+                    fe_values.shape_value_component(i,point,k)*
                     fe_values.JxW(point);
               }
             } // end of i-loop
@@ -503,52 +497,50 @@ namespace mhd
           
           for(unsigned int point=0; point<n_q_points; ++point){
             
-            for(unsigned int i=0; i<stv2dof.Nstv; i++){
+            for(unsigned int i=0; i<fe.n_dofs_per_cell(); i++){
+              const unsigned int comp_i = fe.system_to_component_index(i).first;
               // set first operator - diagonal componetns
               for(unsigned int k=0; k<Nv; k++)
-                if (stv2dof.stateD[i][k]>=0)
-                  O1[k][k]=fe_values.shape_value_component(stv2dof.stateD[i][k],point,k);
+                if (comp_i==k)
+                  O1[k][k]=fe_values.shape_value_component(comp_i,point,k);
               // and curl of vector potential (stored at position of J)
-              if (stv2dof.stateD[i][8]>=0){
-                O1[5][ 8]=-fe_values.shape_grad_component(stv2dof.stateD[i][ 8],point, 8)[2];
-                O1[6][ 8]= fe_values.shape_grad_component(stv2dof.stateD[i][ 8],point, 8)[1];
+              if (comp_i==8){
+                O1[5][ 8]=-fe_values.shape_grad_component(comp_i,point, 8)[2];
+                O1[6][ 8]= fe_values.shape_grad_component(comp_i,point, 8)[1];
               }
-              if (stv2dof.stateD[i][9]>=0){
-                O1[4][ 9]= fe_values.shape_grad_component(stv2dof.stateD[i][ 9],point, 9)[2];
-                O1[6][ 9]=-fe_values.shape_grad_component(stv2dof.stateD[i][ 9],point, 9)[0];
+              if (comp_i==9){
+                O1[4][ 9]= fe_values.shape_grad_component(comp_i,point, 9)[2];
+                O1[6][ 9]=-fe_values.shape_grad_component(comp_i,point, 9)[0];
               }
-              if (stv2dof.stateD[i][10]>=0){
-                O1[4][10]=-fe_values.shape_grad_component(stv2dof.stateD[i][10],point,10)[1];
-                O1[5][10]= fe_values.shape_grad_component(stv2dof.stateD[i][10],point,10)[0];
+              if (comp_i==10){
+                O1[4][10]=-fe_values.shape_grad_component(comp_i,point,10)[1];
+                O1[5][10]= fe_values.shape_grad_component(comp_i,point,10)[0];
               }
               
-              for(unsigned int j=0; j<stv2dof.Nstv; j++){
+              for(unsigned int j=0; j<fe.n_dofs_per_cell(); j++){
+                const unsigned int comp_j = fe.system_to_component_index(j).first;
                 // set first operator - diagonal componetns
                 for(unsigned int k=0; k<Nv; k++)
-                  if (stv2dof.stateD[j][k]>=0)
-                    O2[k][k]=fe_values.shape_value_component(stv2dof.stateD[j][k],point,k);
+                  if (comp_j==k)
+                    O2[k][k]=fe_values.shape_value_component(comp_j,point,k);
                 // and curl of vector potential (stored at position of J)
-                if (stv2dof.stateD[j][8]>=0){
-                  O2[5][ 8]=-fe_values.shape_grad_component(stv2dof.stateD[j][ 8],point, 8)[2];
-                  O2[6][ 8]= fe_values.shape_grad_component(stv2dof.stateD[j][ 8],point, 8)[1];
+                if (comp_j==8){
+                  O2[5][ 8]=-fe_values.shape_grad_component(comp_j,point, 8)[2];
+                  O2[6][ 8]= fe_values.shape_grad_component(comp_j,point, 8)[1];
                 }
-                if (stv2dof.stateD[j][9]>=0){
-                  O2[4][ 9]= fe_values.shape_grad_component(stv2dof.stateD[j][ 9],point, 9)[2];
-                  O2[6][ 9]=-fe_values.shape_grad_component(stv2dof.stateD[j][ 9],point, 9)[0];
+                if (comp_j==9){
+                  O2[4][ 9]= fe_values.shape_grad_component(comp_j,point, 9)[2];
+                  O2[6][ 9]=-fe_values.shape_grad_component(comp_j,point, 9)[0];
                 }
-                if (stv2dof.stateD[j][10]>=0){
-                  O2[4][10]=-fe_values.shape_grad_component(stv2dof.stateD[j][10],point,10)[1];
-                  O2[5][10]= fe_values.shape_grad_component(stv2dof.stateD[j][10],point,10)[0];
+                if (comp_j==10){
+                  O2[4][10]=-fe_values.shape_grad_component(comp_j,point,10)[1];
+                  O2[5][10]= fe_values.shape_grad_component(comp_j,point,10)[0];
                 }
                 // multiplication of the operator matrices
                 for(unsigned int k=0; k<Nv; k++){
-                  int dof_i=stv2dof.stateD[i][k];
-                  if (dof_i<0) continue;
                   for(unsigned int l=0; l<Nv; l++){
-                    int dof_j=stv2dof.stateD[j][l];
-                    if (dof_j<0) continue;
                     for(unsigned int m=0; m<Nv; m++){
-                        cell_matrix(dof_i,dof_j) +=
+                        cell_matrix(i,j) +=
                             O1[m][k]*O2[m][l]*fe_values.JxW(point);
                     }
                   }
@@ -556,10 +548,8 @@ namespace mhd
               }
               // Assembling the right hand side
               for(unsigned int k=0; k<Nv; k++){
-                int dof_i=stv2dof.stateD[i][k];
-                if (dof_i<0) continue;
                 for(unsigned int l=0; l<Nv; l++)
-                  cell_rhs(dof_i) += O1[l][k]*
+                  cell_rhs(i) += O1[l][k]*
                         rhs_values[point](l)*fe_values.JxW(point);
               }
 

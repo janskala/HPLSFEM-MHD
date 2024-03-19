@@ -75,7 +75,6 @@ namespace mhd
   {
     dof_handler.clear();
     //dof_handler_s.clear();
-    delete [] operator_matrixes;
     delete initial_values;
     delete [] DIRK;
     delete mhdeq;
@@ -155,7 +154,7 @@ namespace mhd
         break;
     }
     
-    mhdeq = new MHDequations<dim>(pars, stv2dof, mpi_communicator);
+    mhdeq = new MHDequations<dim>(pars, mpi_communicator);
     mhdeq->setBoxRef(&boxP1,&boxP2);
     
     switch(intMethod){
@@ -175,7 +174,7 @@ namespace mhd
     
     DIRK = new LA::MPI::Vector[mhdeq->DIRK.maxStageAll];
   }
-  
+ /* 
   template <int dim>
   void MHDProblem<dim>::setDofMapping()
   {
@@ -218,13 +217,13 @@ namespace mhd
     }
     stv2dof.Nstv=stv2dof.stateD.size();
     
-    mhdeq->reinitFEval();
+    mhdeq->reinitFEval(); // TODO: set this somewhere!
     
     operator_matrixes = new FullMatrix<double>[stv2dof.Nstv];
     for(unsigned int i=0;i<stv2dof.Nstv;i++)
         operator_matrixes[i].reinit(Ne,Nv);
   }
-  
+  */
   template <int dim>
   void MHDProblem<dim>::setup_system()
   {
@@ -308,6 +307,11 @@ namespace mhd
     Vector<double>       cell_rhs_lin(Ne);
     FullMatrix<double>   cell_matrix(dofs_per_cell, dofs_per_cell);
     Vector<double>       cell_rhs(dofs_per_cell);
+    
+    mhdeq->reinitFEval(dofs_per_cell);
+    operator_matrixes.resize(dofs_per_cell);
+    for(unsigned int i=0;i<dofs_per_cell;i++)
+        operator_matrixes[i].reinit(Ne,Nv);
 
     std::vector<Vector<double> >  old_sv(n_q_points, Vector<double>(Nv));
     std::vector<Vector<double> >  lin_sv(n_q_points, Vector<double>(Nv));
@@ -400,7 +404,7 @@ namespace mhd
 
         fe_values.reinit(cell);
 //         fes_values.reinit(cells);
-        
+   
         fe_values.get_function_values(old_solution, old_sv);
         fe_values.get_function_gradients(old_solution, old_sg);
         fe_values.get_function_values(lin_solution, lin_sv);
@@ -448,17 +452,13 @@ namespace mhd
             mhdeq->setFEvals(fe_values, q_point);
             mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
             
-            for(unsigned int i=0; i<stv2dof.Nstv; i++){
-              for(unsigned int j=0; j<stv2dof.Nstv; j++){
+            for(unsigned int i=0; i<fe.dofs_per_cell; i++){
+              for(unsigned int j=0; j<fe.dofs_per_cell; j++){
                 //if (mhdeq->isDiagonal() && i!=j) continue;
                 for(unsigned int k=0; k<Nv; k++){
-                  int dof_i=stv2dof.stateD[i][k];
-                  if (dof_i<0) continue;
                   for(unsigned int l=0; l<Nv; l++){
-                    int dof_j=stv2dof.stateD[j][l];
-                    if (dof_j<0) continue;
                     for(unsigned int m=0; m<Ne; m++){
-                        cell_matrix(dof_i,dof_j) +=
+                        cell_matrix(i,j) +=
                             operator_matrixes[i](m,k)*
                             operator_matrixes[j](m,l)*
                             weights[m]*fe_values.JxW(q_point);
@@ -468,10 +468,8 @@ namespace mhd
               }
               // Assembling the right hand side
               for(unsigned int k=0; k<Nv; k++){
-                int dof_i=stv2dof.stateD[i][k];
-                if (dof_i<0) continue;
                 for(unsigned int l=0; l<Ne; l++)
-                  cell_rhs(dof_i) += operator_matrixes[i](l,k)*
+                  cell_rhs(i) += operator_matrixes[i](l,k)*
                         (rhs_values[q_point](l)+cell_rhs_lin(l))*
                         weights[l]*fe_values.JxW(q_point);
               }
@@ -513,16 +511,12 @@ namespace mhd
                   mhdeq->setFEvals(fe_face_values,q_point);
                   mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
                   
-                  for(unsigned int i=0; i<stv2dof.Nstv; i++){ // unfortunately we have to go all over the dofs_per_cell
-                    for(unsigned int j=0; j<stv2dof.Nstv; j++){ //   dofs_per_face does not cointain proper basis fce
+                  for(unsigned int i=0; i<fe.dofs_per_cell; i++){ // unfortunately we have to go all over the dofs_per_cell
+                    for(unsigned int j=0; j<fe.dofs_per_cell; j++){ //   dofs_per_face does not cointain proper basis fce
                       for(unsigned int k=0; k<Nv; k++){
-                      int dof_i=stv2dof.stateD[i][k];
-                      if (dof_i<0) continue;
                         for(unsigned int l=0; l<Nv; l++){
-                          int dof_j=stv2dof.stateD[j][l];
-                          if (dof_j<0) continue;
                             for(unsigned int m=0; m<Ne; m++){
-                              cell_matrix(dof_i,dof_j) +=
+                              cell_matrix(i,j) +=
                                   operator_matrixes[i](m,k)*
                                   operator_matrixes[j](m,l)*
                                   weights[m]*fe_face_values.JxW(q_point); // /cell->diameter()
@@ -532,10 +526,8 @@ namespace mhd
                     }
                     // Assembling the right hand side
                     for(unsigned int k=0; k<Nv; k++){
-                      int dof_i=stv2dof.stateD[i][k];
-                      if (dof_i<0) continue;
                       for(unsigned int l=0; l<Ne; l++)
-                        cell_rhs(dof_i) += operator_matrixes[i](l,k)*
+                        cell_rhs(i) += operator_matrixes[i](l,k)*
                               (rhs_values[q_point](l)+cell_rhs_lin(l))*
                               weights[l]*fe_face_values.JxW(q_point); // /cell->diameter()
                       }
@@ -617,7 +609,6 @@ namespace mhd
     triangulation.refine_global(initSplit);
     mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
     setup_system();
-    setDofMapping();
     pcout << "   initial mesh, ndofs: "<< dof_handler.n_dofs() << std::endl;
     
     pcout<<"Refine gradients in initial conditions..."<<std::endl;
@@ -704,7 +695,8 @@ namespace mhd
                                           " dt="<<mhdeq->getDt()<<
                                           " vmax="<<mhdeq->getVmax()<<std::endl;
 
-        if (output_counter*outputFreq<=time){
+        if ((time<=20.0 && output_counter*outputFreq<=time) ||
+            (time>20.0 && (output_counter-20)*outputFreq<=(time-20.0))){
             pcout << output_counter << ". output" << std::endl;
             //setShockSmoothCoef(); // set refinement coeficients
             output_results(output_counter++);
@@ -736,6 +728,7 @@ namespace mhd
   {
     lin_solution=old_solution;
     iter=sitr=0;
+    unsigned int lastSitr=0;
     for(;;){ // linearization
       assemble_system(iter);
       sitr += solve();
@@ -743,9 +736,10 @@ namespace mhd
       system_rhs=lin_solution;
       system_rhs-=distributed_solution;
       double err=system_rhs.linfty_norm();//norm_sqr();
-      if (err<linPrec) break;  //linfty_norm
+      if (err<linPrec || (sitr-lastSitr)<3) break;  //linfty_norm
       iter++;
       if (iter>=linmaxIt) break;
+      lastSitr=sitr;
       solution.swap(lin_solution);
     }
   }
@@ -755,6 +749,7 @@ namespace mhd
   {
     lin_solution=old_solution;
     iter=sitr=0;
+    unsigned int lastSitr=0;
     for(int i=0;i<mhdeq->DIRK.maxStage;i++){
       //pcout<<"DIRK stage: "<<i<<"\n";
       mhdeq->setDIRKStage(i);
@@ -766,9 +761,10 @@ namespace mhd
         system_rhs=lin_solution;
         system_rhs-=distributed_solution;
         double err=system_rhs.linfty_norm();//norm_sqr();
-        if (err<linPrec) break;  //linfty_norm
+        if (err<linPrec || (sitr-lastSitr)<3) break;  //linfty_norm
         iter++;
         if (iter>=linmaxIt) break;
+        lastSitr=sitr;
         solution.swap(lin_solution);
       }
       DIRK[i]=solution;
@@ -833,22 +829,15 @@ namespace mhd
               
           for(unsigned int p=0; p<n_q_points; ++p){
           
-            for(unsigned int i=0; i<stv2dof.Nstv; i++){
-              for(unsigned int j=0; j<stv2dof.Nstv; j++){ // Assemble system for identity operator
+            for(const unsigned int i : fe_values.dof_indices()){
+              for(const unsigned int j : fe_values.dof_indices()){ // Assemble system for identity operator
                 for(unsigned int k=0; k<Nv; k++){
-                  const int dof_i=stv2dof.stateD[i][k];
-                  if (dof_i<0) continue;
-                  const int dof_j=stv2dof.stateD[j][k];
-                  if (dof_j<0) continue;
-                  
-                  cell_matrix(dof_i,dof_j) += fe_values.shape_value_component(dof_i,p,k)*
-                                    fe_values.shape_value_component(dof_j,p,k)*
+                  cell_matrix(i,j) += fe_values.shape_value_component(i,p,k)*
+                                    fe_values.shape_value_component(j,p,k)*
                                     weights[k]*fe_values.JxW(p);
                 }
               }
               for(unsigned int k=0; k<Nv; k++){      // Check values for underflow (density and pressue)
-                const int dof_i=stv2dof.stateD[i][k];
-                if (dof_i<0) continue;
                 switch(k){
                   case 0:  // density
                     RHSvalue=lv[p][k];
@@ -880,8 +869,8 @@ namespace mhd
                     RHSvalue=lv[p][k];
                   break;
                 }
-                cell_rhs(dof_i) += RHSvalue*
-                                  fe_values.shape_value_component(dof_i,p,k)*
+                cell_rhs(i) += RHSvalue*
+                                  fe_values.shape_value_component(i,p,k)*
                                   weights[k]*fe_values.JxW(p);
               }
 

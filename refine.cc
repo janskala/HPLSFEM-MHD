@@ -119,22 +119,20 @@ namespace mhd
             fe_values.get_function_values(solution, values);
             fe_values.get_function_gradients(solution, gadients);
 
-            for(unsigned int l=4; l<7; l++){ // Only B is used for max-grad
+            for(unsigned int l=1; l<7; l++){ // Only B is used for max-grad
                 max[l]=-9e99;
                 min[l]=9e99;
             } 
 
             for(unsigned int point=0; point<n_q_points; ++point)
-                for(unsigned int l=4; l<7; l++){
+                for(unsigned int l=1; l<7; l++){
                     min[l]=std::min(min[l],values[point][l]);
                     max[l]=std::max(max[l],values[point][l]);
                 }
 
             float grad=-9e99;
-            for(unsigned int l=4; l<7; l++){
-                double hlp=std::sqrt(std::fabs(max[l]-min[l]));
-                hlp=std::max(1e-8,hlp);
-                hlp=std::min(hlp,50.0);
+            for(unsigned int l=1; l<7; l++){
+                double hlp=std::log(1.0+std::fabs(max[l]-min[l]))*std::pow(1.0+cell->diameter(),4);
                 if (hlp>grad) grad=hlp; // maximum on cell
             }
 

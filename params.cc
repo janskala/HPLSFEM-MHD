@@ -74,7 +74,7 @@ namespace mhd
                          Patterns::Double(0.0,1.0),
                          "Coeficient from theta scheme - sets implicit/explicit formulation.");
       prm.declare_entry("CFL", "0.2",
-                         Patterns::Double(0.0,1.0),
+                         Patterns::Double(0.0,10.0),
                          "Cournat-Fridrich-Lewy coeficient.");
       prm.declare_entry("CGM interations", "1000",
                          Patterns::Integer(0,1000000),
