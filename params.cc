@@ -103,7 +103,6 @@ namespace mhd
         prm.declare_entry("B", "1.0", Patterns::Double(0,9e99), "Magnetic field.");
         prm.declare_entry("U", "1.0", Patterns::Double(0,9e99), "Total energy.");
         prm.declare_entry("J", "1.0", Patterns::Double(0,9e99), "Current density.");
-        prm.declare_entry("eta", "1.0", Patterns::Double(0,9e99), "Resistivity.");
         prm.declare_entry("div B", "1.0", Patterns::Double(0,9e99), "Additional div B = 0 equation.");
       }
       prm.leave_subsection();
@@ -226,7 +225,6 @@ namespace mhd
         w[8]=prm.get_double("J");
         w[9]=prm.get_double("J");
         w[10]=prm.get_double("J");
-        w[11]=prm.get_double("eta");
         w[12]=prm.get_double("div B");
       }
       prm.leave_subsection();

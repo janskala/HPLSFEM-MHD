@@ -2,10 +2,10 @@
 # ---------------------
 subsection Mesh refinement
   # The gradient from which the mesh is refined.
-  set Refining gradient = 0.3
+  set Refining gradient = 0.05
 
   # The gradient from which the mesh is coarsed.
-  set Coarsing gradient = 0.1
+  set Coarsing gradient = 0.01
 
   # Maximum level of refinement.
   set Maximum level     = 12
@@ -41,7 +41,7 @@ subsection Numerics
   set Gauss int ord            = 1
   
   # Cournat-Fridrich-Lewy coeficient.
-  set CFL                      = 0.05
+  set CFL                      = 1.0
 
   # Maximum number of CGS interations
   set CGM interations          = 1000
@@ -53,36 +53,33 @@ subsection Numerics
   set Linearization tolerance  = 1e-10
 
   # Maximum number of interations for linearization.
-  set Number of linearizations = 8
+  set Number of linearizations = 1 
 
   # From this refinement level Newton-Rapson linearization is used.
   # Otherwise, a simple linearization method is used.
   set Simple level             = 0
 
   # Coeficient from theta scheme - sets implicit/explicit formulation.
-  set theta                    = 0.7
+  set theta                    = 0.6
 
   subsection LS weights
     # Density.
-    set rho   = 1e0
+    set rho   = 6e0
 
     # Momentum.
-    set Pi    = 1e0
+    set Pi    = 4e-1
 
     # Magnetic field.
-    set B     = 4.0
+    set B     = 2e0
 
     # Total energy.
-    set U     = 0.1
+    set U     = 1e0
 
     # Current density.
-    set J     = 1e0
-
-    # Resistivity
-    set eta   = 1e6
+    set J     = 1e-1
 
     # Additional div B = 0 equation.
-    set div B = 1e-1
+    set div B = 5e-3
   end
 
 end
@@ -112,7 +109,7 @@ subsection Simulation
   set eta param 1       = 1e-3
   
   # Second parameter for resistivity model - threshold
-  set eta param 2       = 4.0
+  set eta param 2       = 12.0
   
   # Specific heat.
   set gamma             = 1.6666666666666666666666666666666

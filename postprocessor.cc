@@ -17,9 +17,11 @@ namespace mhd
   Postprocessor<dim>::get_names() const
   {
     std::vector<std::string> solution_names;
-    const char names[3][Nv][4]={ {"rho","u","u_y","u_z","B","B_y","B_z","p","J","J_y","J_z","eta"},
-                          {"rho","u","u","u_z","B","B","B_z","p","J","J","J_z","eta"},
-                          {"rho","u","u","u","B","B","B","p","J","J","J","eta"}};
+    const char names[3][Nv][4]={
+        {"rho","u","u_y","u_z","B","B_y","B_z","p","J","J_y","J_z"},
+        {"rho","u","u","u_z","B","B","B_z","p","J","J","J_z"},
+        {"rho","u","u","u","B","B","B","p","J","J","J"}
+    };
     
     for(unsigned int i=0;i<Nv;i++)
         solution_names.push_back(names[dim-1][i]);
@@ -76,8 +78,28 @@ namespace mhd
       comp_quan[q][8]=uh[q][8];     // J
       comp_quan[q][9]=uh[q][9];
       comp_quan[q][10]=uh[q][10];
-      comp_quan[q][11]=uh[q][11];   // eta
+      //comp_quan[q][11]=(this->*setEta)(uh[q]);
     }
+  }
+
+  template <int dim>
+  ComputeResistivity<dim>::ComputeResistivity(MHDequations<dim>& mhRef)
+    : DataPostprocessorScalar<dim>("eta", update_values), mhdEq(mhRef)
+  {}
+ 
+ 
+  template <int dim>
+  void ComputeResistivity<dim>::evaluate_vector_field(
+    const DataPostprocessorInputs::Vector<dim> &inputs,
+    std::vector<Vector<double>> &               computed_quantities) const
+  {
+    AssertDimension(computed_quantities.size(), inputs.solution_values.size());
+ 
+    for (unsigned int p = 0; p < computed_quantities.size(); ++p)
+      {
+          const Vector<double> &uh=inputs.solution_values[p];
+          computed_quantities[p](0) = mhdEq.getEta(uh);
+      }
   }
 
 } // end of namespace mhd

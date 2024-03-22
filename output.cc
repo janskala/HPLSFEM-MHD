@@ -21,11 +21,14 @@ namespace mhd
     std::ofstream output(filename);
 
     Postprocessor<dim> postprocessor; // Needs to be before DataOut which holds poiter to Postprocessor,
+    ComputeResistivity<dim> resistivity(*mhdeq);
+
     DataOut<dim> data_out;            // otherwise we get error because Postprocessor is destroyed before DataOut
     data_out.attach_triangulation(triangulation);
     
     data_out.attach_dof_handler(dof_handler);
     data_out.add_data_vector(solution,postprocessor);
+    data_out.add_data_vector(solution, resistivity);
     
     Vector<float> subdomain(triangulation.n_active_cells());
     for(unsigned int i=0; i<subdomain.size(); ++i)

@@ -21,8 +21,8 @@ namespace LA
 
 #include "params.h"
 
-#define Ne  13   // Number of the equations  - MHD + eta + div B
-#define Nv  12   // Number of the variables
+#define Ne  12   // Number of the equations  - MHD + div B
+#define Nv  11   // Number of the variables
 #define Nt  8    // Number of time dependent equations
 
 namespace mhd
@@ -84,15 +84,16 @@ namespace mhd
     void setMinh(double minh);
     void setDt(double);
     double getVmax();
+    double getEta(const Vector<double>& V) {return  (this->*setEta)(V);};
     void useNRLinearization(bool);
 //     void setEtaConst(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaVD(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
 //     void setEtaJ(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
     void setTimeRef(double*); // reference on the simulation time
     void setBoxRef(Point<dim>*,Point<dim>*);  // reference on the simulation box geometry
-    double setEtaConst(int);
-    double setEtaVD(int);
-    double setEtaJ(int);
+    double setEtaConst(const Vector<double>&);
+    double setEtaVD(const Vector<double>&);
+    double setEtaJ(const Vector<double>&);
     bool isDiagonal();  // for DIRK - last step uses diagonal matrix
     
 //     typedef void (MHDequations::*p2setEta)(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
@@ -159,7 +160,7 @@ namespace mhd
     double               V[2+3][Nv];   // prev state vectors \Psi 0:(t-1), 1:(lin), 2..4:DIRK
     double               G[2+3][3][Nv];// d\Psi/dx_i
     double               *fev[Nv],*feg[3][Nv];
-    double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0,1e-0, 1e0,1e0};
+    double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0, 1e-0, 1e0};
     
     double        dt;                  // time step size
     double        newdt;
@@ -186,7 +187,7 @@ namespace mhd
     typedef void (MHDequations::*p2clcRhs)(Vector<double>&);
     p2clcRhs clcRhs;
     
-    typedef double (MHDequations::*p2setEta)(int);
+    typedef double (MHDequations::*p2setEta)(const Vector<double>&);
     p2setEta setEta;
   };
   

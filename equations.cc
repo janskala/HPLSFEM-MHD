@@ -24,8 +24,7 @@ namespace mhd
     values(8) = 0.0;  // J
     values(9) = 0.0;
     values(10) = 0.0;
-    values(11) = 0.0; // eta
-    values(12) = 0.0; // div B
+    values(11) = 0.0; // div B
   }
 
 
@@ -74,7 +73,7 @@ namespace mhd
     }
     pars.prm.leave_subsection();
     
-    NRLin=false;
+    NRLin=true;
     
     switch(ETAmet){
       case 0:
@@ -347,12 +346,8 @@ namespace mhd
     if ((V[1][7]-buf)<pc){
       V[1][7]=buf+pc;
     }
+    ETA = (this->*setEta)((*Vqp[0])[qp]);
 
-    // set resistivity
-    V[0][11]=(this->*setEta)(0); // old time step values
-    for(int k = 1; k <= 2+DIRK.stage; k++)
-        V[k][11]=V[0][11];
-    
     checkDt();
   }
   
@@ -456,8 +451,6 @@ namespace mhd
     F[2]+=gravity[1]*V[0][0]*dtoth;
     F[3]+=gravity[2]*V[0][0]*dtoth;
     F[7]+=dtoth*(gravity[0]*V[0][1]+gravity[1]*V[0][2]+gravity[2]*V[0][3]);
-
-    F[11]=dt*V[0][11];//(this->*setEta)(0);  // calculate it from old time values
   }
    
   template <int dim>
@@ -480,8 +473,6 @@ namespace mhd
     for(unsigned int k=0;k<Nt;k++)
       F[k]-=dtth*sum[k];
 
-    //F[11]=dt*V[0][11];//(this->*setEta)(0);
-    
     for(int l=0;l<DIRK.stage;l++){
       int lStage=2+l;
       JacobiM(V[lStage]);
@@ -533,7 +524,6 @@ namespace mhd
       F[8]+= dcf*V[lStage][8];  // current density
       F[9]+= dcf*V[lStage][9];
       F[10]+=dcf*V[lStage][10];
-      //F[11]+=dcf*V[0][11];//(this->*setEta)(0);//(lStage); // resistivity
     }
   }
  /* 
