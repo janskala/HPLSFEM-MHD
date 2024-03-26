@@ -13,14 +13,13 @@ namespace mhd
   {
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
       
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=0.0;
+      for(unsigned int i = 0; i < Nv; i++)
+        for(unsigned int j = 0; j < dim; j++)
+          (*G[k])[i][j]=0.0;
     
   }
   
@@ -39,8 +38,7 @@ namespace mhd
       
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
    /* 
     double cf=0.9;
     V[0][1]*=cf;
@@ -57,14 +55,12 @@ namespace mhd
     }*/
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=(*Gqp[k])[qp][i][j];
-        
+        G[k]=&(*Gqp[k])[qp];
+
     for(int k = 0; k <= 2+DIRK.stage; k++){
-     G[k][n0][1]=0.0;  // velocity
-     G[k][n0][2]=0.0;
-     G[k][n0][3]=0.0;
+     (*G[k])[1][n0]=0.0;  // velocity
+     (*G[k])[2][n0]=0.0;
+     (*G[k])[3][n0]=0.0;
     }
   }
   
@@ -86,24 +82,21 @@ namespace mhd
     
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
     
     double cf=0.1;
-    V[0][1]*=cf;
-    V[0][2]*=cf;
-    V[0][3]*=cf;
+    (*V[0])[1]*=cf;
+    (*V[0])[2]*=cf;
+    (*V[0])[3]*=cf;
     
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=(*Gqp[k])[qp][i][j];
+        G[k]=&(*Gqp[k])[qp];
 
     for(int k = 0; k <= 2+DIRK.stage; k++){
-     G[k][n0][1]=0.0;  // velocity
-     G[k][n0][2]=0.0;
-     G[k][n0][3]=0.0;
+     (*G[k])[1][n0]=0.0;  // velocity
+     (*G[k])[2][n0]=0.0;
+     (*G[k])[3][n0]=0.0;
     }
 }
   
@@ -118,14 +111,11 @@ namespace mhd
     unsigned int c=0,d;
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
     
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=(*Gqp[k])[qp][i][j];
+        G[k]=&(*Gqp[k])[qp];
     
     for(unsigned int j = 0; j < dim; j++)
       if (std::fabs(n[j])>0.5){  
@@ -137,8 +127,8 @@ namespace mhd
 
     double cf=0.1;
     for(int k = 0; k <= 2+DIRK.stage; k++){
-      V[k][1+c]*=cf;  // mirror velocity
-      V[k][4+d]*=cf;  // mirror B
+      (*V[k])[1+c]*=cf;  // mirror velocity
+      (*V[k])[4+d]*=cf;  // mirror B
     }
   }
   
@@ -160,8 +150,9 @@ namespace mhd
     
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
+    
+    Vector<double>& S0=*V[0]; // State vector from lin. it.
     
   //----------- Geometry
 
@@ -225,21 +216,19 @@ namespace mhd
 
   */
 
-  V[0][1]=-omega*epsilon*((yy-y_fpc)*vfp1+(yy+y_fpc)*vfp2)*V[0][0];
-  V[0][2]=omega*invEpsilon*(xx*vfp1+xx*vfp2)*V[0][0];
-  V[0][3]=0.0;
+  S0[1]=-omega*epsilon*((yy-y_fpc)*vfp1+(yy+y_fpc)*vfp2)*S0[0];
+  S0[2]=omega*invEpsilon*(xx*vfp1+xx*vfp2)*S0[0];
+  S0[3]=0.0;
 
     
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=(*Gqp[k])[qp][i][j];
+        G[k]=&(*Gqp[k])[qp];
 
     for(int k = 0; k <= 2+DIRK.stage; k++){
-     G[k][n0][1]=0.0;  // velocity
-     G[k][n0][2]=0.0;
-     G[k][n0][3]=0.0;
+     (*G[k])[1][n0]=0.0;  // velocity
+     (*G[k])[2][n0]=0.0;
+     (*G[k])[3][n0]=0.0;
     }
 }
   

@@ -314,39 +314,40 @@ namespace mhd
   {
     // set state vector values
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for (unsigned int i = 0; i < Nv; i++)
-        V[k][i] = (*Vqp[k])[qp](i);
+        V[k] = &(*Vqp[k])[qp];
     
     // ... and for gradients
     for(int k = 0; k <= 2+DIRK.stage; k++)
-      for(unsigned int j = 0; j < dim; j++)
-        for(unsigned int i = 0; i < Nv; i++)
-          G[k][j][i]=(*Gqp[k])[qp][i][j];
+        G[k]=&(*Gqp[k])[qp];
+
+    Vector<double>& S0=*V[0]; // State vector from prev. time step (old)
 
     // checking underflow of density and pressure
     const double pc=1e-4/(GAMMA-1.0),rhc=1e-1;
-    if (V[0][0]<rhc){  // check density
-      V[0][0]=rhc;
-    }
-    if (V[1][0]<rhc){
-      V[1][0]=rhc;
+    if (S0[0]<rhc){  // check density
+      S0[0]=rhc;
     }
     
     // check pressure
     double Uk,Um,buf;
-    Uk=(V[0][1]*V[0][1]+V[0][2]*V[0][2]+V[0][3]*V[0][3])/(V[0][0]);
-    Um=V[0][4]*V[0][4]+V[0][5]*V[0][5]+V[0][6]*V[0][6];
+    Uk=(S0[1]*S0[1]+S0[2]*S0[2]+S0[3]*S0[3])/(S0[0]);
+    Um=S0[4]*S0[4]+S0[5]*S0[5]+S0[6]*S0[6];
     buf=Um+Uk;
-    if ((V[0][7]-buf)<pc){
-      V[0][7]=buf+pc;
+    if ((S0[7]-buf)<pc){
+      S0[7]=buf+pc;
     }
-    Uk=(V[1][1]*V[1][1]+V[1][2]*V[1][2]+V[1][3]*V[1][3])/(V[1][0]);
-    Um=V[1][4]*V[1][4]+V[1][5]*V[1][5]+V[1][6]*V[1][6];
+    ETA = (this->*setEta)(S0);
+    
+    Vector<double>& Sl=*V[1]; // State vector from lin. it.
+    Uk=(Sl[1]*Sl[1]+Sl[2]*Sl[2]+Sl[3]*Sl[3])/(Sl[0]);
+    Um=Sl[4]*Sl[4]+Sl[5]*Sl[5]+Sl[6]*Sl[6];
     buf=Um+Uk;
-    if ((V[1][7]-buf)<pc){
-      V[1][7]=buf+pc;
+    if ((Sl[7]-buf)<pc){
+      Sl[7]=buf+pc;
     }
-    ETA = (this->*setEta)((*Vqp[0])[qp]);
+    if (Sl[0]<rhc){
+      Sl[0]=rhc;
+    }
 
     checkDt();
   }
@@ -361,8 +362,8 @@ namespace mhd
   template <int dim>
   void MHDequations<dim>::set_operators_full(std::vector<FullMatrix<double>>& O)
   {
-    JacobiM(V[1]);
-    if (NRLin) dxA(V[1],G[1]);
+    JacobiM(*V[1]);
+    if (NRLin) dxA(*V[1],*G[1]);
     
     for(unsigned int i=0;i<O.size();i++){
       double thdt=theta*dt;
@@ -422,10 +423,12 @@ namespace mhd
   {
     double sum[Nt],sum2[Nt],dtth,dtoth;
     
-    JacobiM(V[0]);
+    const Vector<double>& S0=*V[0]; // State vector from prev. time step (old)
+    const Vector<double>& Sl=*V[1]; // State vector from lin. it.
+    JacobiM(S0);
     
     for(unsigned int k=0;k<Nt;k++){
-      F[k]=V[0][k];
+      F[k]=S0[k];
       sum[k]=sum2[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
@@ -434,12 +437,12 @@ namespace mhd
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum2[k]+=B[k][l]*V[1][l];
+          sum2[k]+=B[k][l]*Sl[l];
     // old time term dt*(1-\theta)*\pard{F_i}{x_i}
     for(unsigned int d=0;d<dim;d++)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum[k]+=A[d][k][l]*G[0][d][l];
+          sum[k]+=A[d][k][l]*(*G[0])[l][d];
       
     dtth=-dt*theta;
     dtoth=dt*(1.0-theta);
@@ -447,10 +450,10 @@ namespace mhd
       F[k]-=dtoth*sum[k]+dtth*sum2[k];
     
     // add gravity terms
-    F[1]+=gravity[0]*V[0][0]*dtoth;
-    F[2]+=gravity[1]*V[0][0]*dtoth;
-    F[3]+=gravity[2]*V[0][0]*dtoth;
-    F[7]+=dtoth*(gravity[0]*V[0][1]+gravity[1]*V[0][2]+gravity[2]*V[0][3]);
+    F[1]+=gravity[0]*S0[0]*dtoth;
+    F[2]+=gravity[1]*S0[0]*dtoth;
+    F[3]+=gravity[2]*S0[0]*dtoth;
+    F[7]+=dtoth*(gravity[0]*S0[1]+gravity[1]*S0[2]+gravity[2]*S0[3]);
   }
    
   template <int dim>
@@ -459,7 +462,7 @@ namespace mhd
     double sum[Nt],dtth;
 
     for(unsigned int k=0;k<Nt;k++){
-      F[k]=V[0][k];
+      F[k]=(*V[0])[k];
       sum[k]=0.0;
     }
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
@@ -467,22 +470,22 @@ namespace mhd
     if (NRLin)
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
-          sum[k]+=B[k][l]*V[1][l];
+          sum[k]+=B[k][l]*(*V[1])[l];
     
     dtth=-dt*theta;
     for(unsigned int k=0;k<Nt;k++)
       F[k]-=dtth*sum[k];
 
     for(int l=0;l<DIRK.stage;l++){
-      int lStage=2+l;
-      JacobiM(V[lStage]);
+      const int lStage=2+l;
+      JacobiM(*V[lStage]);
       
       for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
         
       for(unsigned int d=0;d<dim;d++)
         for(unsigned int k=0;k<Nt;k++)
           for(unsigned int l=0;l<Nv;l++)
-            sum[k]+=A[d][k][l]*G[lStage][d][l];
+            sum[k]+=A[d][k][l]*(*G[lStage])[l][d];
           
       for(unsigned int k=0;k<Nt;k++)
         F[k]-=dt*DIRK.ab[DIRK.method][DIRK.stage][l]*sum[k];
@@ -495,20 +498,21 @@ namespace mhd
     double sum[Nt];
 
     for(unsigned int k=0;k<Nt;k++)
-      F[k]=V[0][k];
+      F[k]=(*V[0])[k];
     
     for(unsigned int k=Nt;k<Ne;k++) F[k]=0.0;
     
     for(int l=0;l<=DIRK.stage;l++){
-      int lStage=2+l;
-      JacobiM(V[lStage]);
+      const int lStage=2+l;
+      const Vector<double>& Sd=*V[lStage]; // State vector from DIRK stage
+      JacobiM(Sd);
       
       for(unsigned int k=0;k<Nt;k++) sum[k]=0.0;
         
       for(unsigned int d=0;d<dim;d++)
         for(unsigned int k=0;k<Nt;k++)
           for(unsigned int l=0;l<Nv;l++)
-            sum[k]+=A[d][k][l]*G[lStage][d][l];
+            sum[k]+=A[d][k][l]*(*G[lStage])[l][d];
           
       double dcf=DIRK.ab[DIRK.method][DIRK.stage+1][l];
       double ddt=dt*dcf;
@@ -516,14 +520,14 @@ namespace mhd
         F[k]-=ddt*sum[k];
       
       // add gravity terms
-      F[1]+=gravity[0]*V[lStage][0]*ddt;
-      F[2]+=gravity[1]*V[lStage][0]*ddt;
-      F[3]+=gravity[2]*V[lStage][0]*ddt;
-      F[7]+=ddt*(gravity[0]*V[lStage][1]+gravity[1]*V[lStage][2]+gravity[2]*V[lStage][3]);
+      F[1]+=gravity[0]*Sd[0]*ddt;
+      F[2]+=gravity[1]*Sd[0]*ddt;
+      F[3]+=gravity[2]*Sd[0]*ddt;
+      F[7]+=ddt*(gravity[0]*Sd[1]+gravity[1]*Sd[2]+gravity[2]*Sd[3]);
       
-      F[8]+= dcf*V[lStage][8];  // current density
-      F[9]+= dcf*V[lStage][9];
-      F[10]+=dcf*V[lStage][10];
+      F[8]+= dcf*Sd[8];  // current density
+      F[9]+= dcf*Sd[9];
+      F[10]+=dcf*Sd[10];
     }
   }
  /* 
@@ -626,24 +630,25 @@ namespace mhd
     newdt=1e99;
     vmax=0.0;
     
-    iRh=1.0/V[1][0];
+    const Vector<double>& Sl=*V[1]; // State vector from lin. it.
+    iRh=1.0/Sl[0];
     iRh2=iRh*iRh;
-    B2=V[1][4]*V[1][4]+V[1][5]*V[1][5]+V[1][6]*V[1][6];
-    buf=(V[1][1]*V[1][1]+V[1][2]*V[1][2]+V[1][3]*V[1][3])*iRh+B2;
+    B2=Sl[4]*Sl[4]+Sl[5]*Sl[5]+Sl[6]*Sl[6];
+    buf=(Sl[1]*Sl[1]+Sl[2]*Sl[2]+Sl[3]*Sl[3])*iRh+B2;
     
-    p=GAMMA*(GAMMA-1.0)*(V[1][7]-buf); // gamma*p
+    p=GAMMA*(GAMMA-1.0)*(Sl[7]-buf); // gamma*p
     a=(p+B2)*iRh;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][4]*V[1][4]*iRh2)));
-    if (V[1][1]>0.0) vlc=V[1][1]*iRh+cf;
-    else vlc=V[1][1]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*Sl[4]*Sl[4]*iRh2)));
+    if (Sl[1]>0.0) vlc=Sl[1]*iRh+cf;
+    else vlc=Sl[1]*iRh-cf;
     buf=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][5]*V[1][5]*iRh2)));
-    if (V[1][2]>0.0) vlc=V[1][2]*iRh+cf;
-    else vlc=V[1][2]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*Sl[5]*Sl[5]*iRh2)));
+    if (Sl[2]>0.0) vlc=Sl[2]*iRh+cf;
+    else vlc=Sl[2]*iRh-cf;
     buf+=vlc*vlc;
-    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*V[1][6]*V[1][6]*iRh2)));
-    if (V[1][3]>0.0) vlc=V[1][3]*iRh+cf;
-    else vlc=V[1][3]*iRh-cf;
+    cf=sqrt(0.5*(a+sqrt(a*a-4.0*p*Sl[6]*Sl[6]*iRh2)));
+    if (Sl[3]>0.0) vlc=Sl[3]*iRh+cf;
+    else vlc=Sl[3]*iRh-cf;
     buf+=vlc*vlc;
     
     vlc=sqrt(buf); // fast magnetoacustic wave speed

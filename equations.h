@@ -72,8 +72,8 @@ namespace mhd
     void set_rhs_DIRK(Vector<double>&);
     void set_rhs_DIRK_last(Vector<double>&);
     
-    void JacobiM(double v[]);
-    void dxA(double v[], double dv[][Nv]);
+    void JacobiM(const Vector<double>&);
+    void dxA(const Vector<double>& v, const std::vector<Tensor<1,dim>>&);
 //     void fluxes(double v[]);
 //    bool checkOverflow(LA::MPI::Vector&, LA::MPI::Vector&);
 //    void checkDt(LA::MPI::Vector&);
@@ -157,8 +157,8 @@ namespace mhd
     
     double               A[3][Ne][Nv]; // Jacobi matrix from fluxes Fx, Fy and Fz
     double               B[Ne][Nv];    // \sum_i dA_i/dx_i
-    double               V[2+3][Nv];   // prev state vectors \Psi 0:(t-1), 1:(lin), 2..4:DIRK
-    double               G[2+3][3][Nv];// d\Psi/dx_i
+    Vector<double>*      V[2+3];       // prev state vectors \Psi 0:(t-1), 1:(lin), 2..4:DIRK
+    std::vector<Tensor<1,dim>> *   G[2+3];       // d\Psi/dx_i
     double               *fev[Nv],*feg[3][Nv];
     double weights[Ne]={1e4,1.0,1.0, 1.0,1.0,1.0, 1.0,1.0, 1e-0, 1e-0, 1e-0, 1e0};
     
