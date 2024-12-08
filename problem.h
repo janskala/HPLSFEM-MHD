@@ -86,7 +86,7 @@ namespace mhd
   private:
     void setup_parameters(Params&);
     void setup_system();
-    void assemble_system(const int);
+    void assemble_system();
     
     
     unsigned int solve();
@@ -94,7 +94,7 @@ namespace mhd
     void refine_grid_rule();
     void setShockSmoothCoef();
     void transfer_solution();
-    void output_results(const unsigned int cycle);
+    void output_results(const unsigned int cycle, const double time);
     void project_initial_conditions();  // implemented in initcon.cc
     void project_init_cnd_vecpot();     // implemented in initcon.cc
     void corrections();
@@ -154,6 +154,7 @@ namespace mhd
     
     double totalTime;
     double outputFreq;
+    int    outputFmt;
     double CGMprec;
     double linPrec;
     int CGMmaxIt;
@@ -162,6 +163,7 @@ namespace mhd
     
     unsigned int meshMinLev;
     unsigned int meshMaxLev;
+    unsigned int meshLev;
     double meshRefGrad;
     double meshCoaGrad;
     unsigned int initSplit;

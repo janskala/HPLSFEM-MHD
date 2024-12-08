@@ -91,6 +91,9 @@ namespace mhd
     pars.prm.enter_subsection("Output");
     {
       outputFreq=pars.prm.get_double("Output frequency");
+      std::string fmt=pars.prm.get("Output format");
+      if (fmt=="h5") outputFmt=1;
+      else outputFmt=0;
     }
     pars.prm.leave_subsection();
     pars.prm.enter_subsection("Simulation");
@@ -224,6 +227,7 @@ namespace mhd
         operator_matrixes[i].reinit(Ne,Nv);
   }
   */
+
   template <int dim>
   void MHDProblem<dim>::setup_system()
   {
@@ -237,6 +241,7 @@ namespace mhd
                                          locally_relevant_dofs);
 
     constraints.clear();
+    constraints.reinit(dof_handler.locally_owned_dofs(), locally_relevant_dofs);
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     constraints.close();
 
@@ -264,7 +269,7 @@ namespace mhd
     distributed_solution.reinit(locally_owned_dofs, mpi_communicator);  // for solver - no ghosts
     shockIndicator.reinit(triangulation.n_active_cells());
     shockWeights.reinit(triangulation.n_active_cells()*Nv);
-    
+
     shockIndicator=1.0;
     shockWeights=1.0;
     // make a array for eta
@@ -277,7 +282,7 @@ namespace mhd
   }
   
   template <int dim>
-  void MHDProblem<dim>::assemble_system(const int /*iter*/)
+  void MHDProblem<dim>::assemble_system()
   {
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "assembly");
@@ -443,12 +448,22 @@ namespace mhd
             }
           }
         }else{*/  // regular matrix construction
-          mhdeq->useNRLinearization(cell->level()>linLevel/* || maxErr>linPrec*1e3*/);
+        mhdeq->useNRLinearization(cell->level()>linLevel/* || maxErr>linPrec*1e3*/); // No N-R lin.
 
-          // Then assemble the entries of the local stiffness matrix and right
-          // hand side vector.
-          for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
+        // Then assemble the entries of the local stiffness matrix and right
+        // hand side vector.
+        double w_e=0.0; // lets weight elements in order to get better coditioned mtrx
+        for(unsigned int q_point=0; q_point<n_q_points; ++q_point) // reduce weight where is big tmp change
+          for(unsigned int i=0; i<3; i++)
+            for(unsigned int j=0; j<dim; j++)
+                w_e=std::max(w_e,std::max( std::abs(lin_sg[q_point][1+i][j]), // max |d\pi/dx_i|
+                    std::abs(lin_sg[q_point][8+i][j]) ));// max |dJ\x_i|
+        
+        w_e=w_e>2.0?(w_e-2.0)*0.1:0.0; // switch-on
+        w_e=1.0/(1.0+0.4*w_e) * pow(cell->diameter(),-dim);
+        for(unsigned int q_point=0; q_point<n_q_points; ++q_point){
             mhdeq->set_state_vector_for_qp(pVecVec,pVecTen, q_point);
+            mhdeq->dumpenOsc(unsigned(cell->level())==meshMaxLev,shockIndicator(cellNo) > meshRefGrad);
             mhdeq->setFEvals(fe_values, q_point);
             mhdeq->calucate_matrix_rhs(operator_matrixes,cell_rhs_lin);
             
@@ -461,7 +476,7 @@ namespace mhd
                         cell_matrix(i,j) +=
                             operator_matrixes[i](m,k)*
                             operator_matrixes[j](m,l)*
-                            weights[m]*fe_values.JxW(q_point);
+                            weights[m]*fe_values.JxW(q_point)*w_e;
                     }
                   }
                 }
@@ -471,7 +486,7 @@ namespace mhd
                 for(unsigned int l=0; l<Ne; l++)
                   cell_rhs(i) += operator_matrixes[i](l,k)*
                         (rhs_values[q_point](l)+cell_rhs_lin(l))*
-                        weights[l]*fe_values.JxW(q_point);
+                        weights[l]*fe_values.JxW(q_point)*w_e;
               }
 
             } // end of i-loop
@@ -519,7 +534,7 @@ namespace mhd
                               cell_matrix(i,j) +=
                                   operator_matrixes[i](m,k)*
                                   operator_matrixes[j](m,l)*
-                                  weights[m]*fe_face_values.JxW(q_point); // /cell->diameter()
+                                  weights[m]*fe_face_values.JxW(q_point)*w_e; // /cell->diameter()
                           }
                         }
                       }
@@ -529,7 +544,7 @@ namespace mhd
                       for(unsigned int l=0; l<Ne; l++)
                         cell_rhs(i) += operator_matrixes[i](l,k)*
                               (rhs_values[q_point](l)+cell_rhs_lin(l))*
-                              weights[l]*fe_face_values.JxW(q_point); // /cell->diameter()
+                              weights[l]*fe_face_values.JxW(q_point)*w_e; // /cell->diameter()
                       }
                           
                   }  // end of i
@@ -616,7 +631,6 @@ namespace mhd
       project_initial_conditions();
       //mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
       //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
-      solution = distributed_solution;  // copy results to the solution (it includes ghosts)
       //refine_grid_simple();  // error estimator does not work
       setShockSmoothCoef(); // set refinement coeficients
       refine_grid_rule();
@@ -632,7 +646,6 @@ namespace mhd
     project_initial_conditions();
     //mhdeq->checkOverflow(distributed_solution,distributed_solution); //check overflow
     corrections();
-    solution = distributed_solution;  // copy results to the solution (it includes ghosts)
     //(mhdeq->*(mhdeq->setEta))(distributed_solution,eta,eta_dist);
     //mhdeq->checkDt(solution);         // find and set dt
     mhdeq->setNewDt();
@@ -640,7 +653,7 @@ namespace mhd
     pcout << "   First output."<<std::endl;
     old_solution=solution;
     setShockSmoothCoef(); // set refinement coeficients
-    output_results(output_counter++);
+    output_results(output_counter++,0.0);
     double time;
     mhdeq->setTimeRef(&time);
     for(time=0.0; time<totalTime; ){
@@ -693,13 +706,14 @@ namespace mhd
         if (time_step%1==0) pcout << "l. it.: " << iter << 
                                           " s. it.:"<< sitr << 
                                           " dt="<<mhdeq->getDt()<<
-                                          " vmax="<<mhdeq->getVmax()<<std::endl;
+                                          " vmax="<<mhdeq->getVmax()<<
+                                          " Etamax="<<mhdeq->getEtaMax()<<
+                                          std::endl;
 
-        if ((time<=20.0 && output_counter*outputFreq<=time) ||
-            (time>20.0 && (output_counter-20)*outputFreq<=(time-20.0))){
+        if (output_counter*outputFreq<=time){
             pcout << output_counter << ". output" << std::endl;
             //setShockSmoothCoef(); // set refinement coeficients
-            output_results(output_counter++);
+            output_results(output_counter++,time);
         }
 
         time_step++;
@@ -730,7 +744,7 @@ namespace mhd
     iter=sitr=0;
     unsigned int lastSitr=0;
     for(;;){ // linearization
-      assemble_system(iter);
+      assemble_system();
       sitr += solve();
       corrections();
       system_rhs=lin_solution;
@@ -755,7 +769,7 @@ namespace mhd
       mhdeq->setDIRKStage(i);
       for(;;){ // linearization
         //pcout<<"lin. step: "<<iter<<"\n";
-        assemble_system(i);
+        assemble_system();
         sitr += solve();
         corrections();
         system_rhs=lin_solution;
@@ -772,7 +786,7 @@ namespace mhd
 //     output_results(1);
 //     pcout<<iter<<" lin it, DIRK end stage: "<<mhdeq->DIRK.maxStage<<"\n";
     mhdeq->setDIRKStage(mhdeq->DIRK.maxStage);
-    assemble_system(mhdeq->DIRK.maxStage);
+    assemble_system();
     sitr += solve();
     corrections();
 //     output_results(2);
@@ -785,7 +799,7 @@ namespace mhd
     lin_solution=old_solution;
     mhdeq->setDt(0.0);
     if (intMethod!=0) mhdeq->setDIRKStage(0);
-    assemble_system(0);
+    assemble_system();
     solve();
     //mhdeq->checkOverflow(distributed_solution,old_solution);
     solution=distributed_solution;

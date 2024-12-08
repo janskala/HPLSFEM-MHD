@@ -23,7 +23,7 @@ namespace mhd
         "\n";
     if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0){
       std::cout << message;
-      prm.print_parameters(std::cout, ParameterHandler::Text);
+      prm.print_parameters(std::cout, ParameterHandler::PRM);
     }
   }
   
@@ -231,7 +231,7 @@ namespace mhd
     }
     prm.leave_subsection();
   }
-  
+
   void Params::setGravity(double *g)
   {
     prm.enter_subsection("Simulation");

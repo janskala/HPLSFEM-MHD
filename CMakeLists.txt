@@ -23,12 +23,13 @@ SET(TARGET_SRC
 
 # Define the output that should be cleaned:
 SET(CLEAN_UP_FILES *.vtu *.pvtu *.visit)
+SET(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=bfd")
 
 # Usually, you will not need to modify anything beyond this point...
 
 CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
 
-FIND_PACKAGE(deal.II 9.4.0 QUIET
+FIND_PACKAGE(deal.II 9.7.0 QUIET
   HINTS ${deal.II_DIR} ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
 IF(NOT ${deal.II_FOUND})

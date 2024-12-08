@@ -73,7 +73,7 @@ namespace mhd
     }
     pars.prm.leave_subsection();
     
-    NRLin=true;
+    NRLin=false;
     
     switch(ETAmet){
       case 0:
@@ -97,9 +97,9 @@ namespace mhd
     BCp[4]=&MHDequations::vortexBC;
     
     for(unsigned int i=0;i<Nv;i++){
-      fev[i] = new double[0];
+      fev[i] = new double[Nv];
       for(unsigned int d=0;d<3;d++)
-        feg[d][i] = new double[0];
+        feg[d][i] = new double[Nv];
     }
     
     // default time integration method is theta scheme
@@ -353,6 +353,12 @@ namespace mhd
   }
   
   template <int dim>
+  void MHDequations<dim>::dumpenOsc(const bool isMax, const bool isSteep)
+  {
+      if (isMax && isSteep) ETA = 0.01; // Damp oscillation
+  }
+  
+  template <int dim>
   void MHDequations<dim>::calucate_matrix_rhs(std::vector<FullMatrix<double>>& O, Vector<double> &F)
   {
     (this->*clcMat)(O);
@@ -381,6 +387,7 @@ namespace mhd
       for(unsigned int k=Nt;k<Ne;k++)
         for(unsigned int l=0;l<Nv;l++)
           O[i](k,l)=0.0;
+
       // diagonal part 1
       for(unsigned int l=0;l<Nt;l++) O[i](l,l)+=fev[l][i];
       for(unsigned int l=Nt;l<Nv;l++) O[i](l,l)+=dt*fev[l][i]; // J_i and \eta
@@ -419,6 +426,14 @@ namespace mhd
   }
 
   template <int dim>
+  void MHDequations<dim>::set_rhs_old(Vector<double> &F)
+  {
+    const Vector<double>& S0=*V[0]; // State vector from prev. time step (old)
+    for(unsigned int k=0;k<Nt;k++)
+      F[k]=S0[k];
+  }
+
+  template <int dim>
   void MHDequations<dim>::set_rhs_theta(Vector<double> &F)
   {
     double sum[Nt],sum2[Nt],dtth,dtoth;
@@ -443,11 +458,41 @@ namespace mhd
       for(unsigned int k=0;k<Nt;k++)
         for(unsigned int l=0;l<Nv;l++)
           sum[k]+=A[d][k][l]*(*G[0])[l][d];
-      
+    
+    // Add resistivity as explicit terms from k-iteration
+    switch(dim){
+      case 3:
+          sum2[4]-=-ETA * (*G[1])[9][2];
+          sum2[5]-= ETA * (*G[1])[8][2];
+          sum2[7]-=(-Sl[9] *(*G[1])[4][2]
+                   +Sl[8] * (*G[1])[5][2]
+                   +Sl[5] * (*G[1])[8][2]
+                   -Sl[4] * (*G[1])[9][2] ) *2*ETA;
+          [[fallthrough]];
+
+      case 2:
+          sum2[4]-= ETA * (*G[1])[10][1];
+          sum2[6]-=-ETA * (*G[1])[8][1];
+          sum2[7]-=(+Sl[10]*(*G[1])[4][1]
+                   -Sl[8] * (*G[1])[6][1]
+                   -Sl[6] * (*G[1])[8][1]
+                   +Sl[4] * (*G[1])[10][1] ) *2*ETA;
+          [[fallthrough]];
+
+      case 1:
+          sum2[5]-=-ETA * (*G[1])[10][0];
+          sum2[6]-= ETA * (*G[1])[9][0];
+          sum2[7]-=(-Sl[10]*(*G[1])[5][0]
+                   +Sl[9] * (*G[1])[6][0]
+                   +Sl[6] * (*G[1])[9][0]
+                   -Sl[5] * (*G[1])[10][0] ) *2*ETA;
+    }
+  
     dtth=-dt*theta;
     dtoth=dt*(1.0-theta);
     for(unsigned int k=0;k<Nt;k++)
       F[k]-=dtoth*sum[k]+dtth*sum2[k];
+   
     
     // add gravity terms
     F[1]+=gravity[0]*S0[0]*dtoth;
@@ -654,7 +699,7 @@ namespace mhd
     vlc=sqrt(buf); // fast magnetoacustic wave speed
     buf = CFL*hmin/vlc;
     if (buf<newdt) newdt = buf;  // use minimum dt
-    buf = CFL*hmin*hmin/(12.0*ETAmax);  // 8 is orig
+    buf = CFL*hmin*hmin/(2.0*ETA);  // 8 is orig
     if (buf<newdt) newdt = buf;  // use minimum dt for resistivity
     if (vlc>vmax) vmax=vlc;
 
@@ -685,6 +730,13 @@ namespace mhd
   {
     vmax=Utilities::MPI::max(vmax,mpi_communicator);
     return vmax;
+  }
+  
+  template <int dim>
+  double MHDequations<dim>::getEtaMax()
+  {
+    ETAmax=Utilities::MPI::max(ETAmax,mpi_communicator);
+    return ETAmax;
   }
   
 //   template <int dim>

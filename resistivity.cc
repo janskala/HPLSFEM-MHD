@@ -13,7 +13,7 @@ namespace mhd
   {
     double J=std::sqrt(S[8]*S[8]+S[9]*S[9]+S[10]*S[10]);
     if (J>ETApar2){
-      double eta = (J-ETApar2)*ETApar1;
+      double eta = std::min((J-ETApar2)*ETApar1,0.1);
       if (eta>ETAmax) ETAmax=eta;
       return eta;
     }else return 0.0;
@@ -24,7 +24,7 @@ namespace mhd
   {
     double VD=std::sqrt(S[8]*S[8]+S[9]*S[9]+S[10]*S[10])/S[0];
     if (VD>ETApar2){
-      double eta = (VD-ETApar2)*ETApar1;
+      double eta = std::min((VD-ETApar2)*ETApar1,0.1);
       if (eta>ETAmax) ETAmax=eta;
       return eta;
     }else return 0.0;

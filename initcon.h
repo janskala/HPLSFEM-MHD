@@ -15,7 +15,7 @@ namespace mhd
     InitialValues(Params &);
     virtual void point_value(const Point<dim> &, Vector<double>&) const{};
     virtual void vector_value_list(const std::vector<Point<dim> >&,
-                                    std::vector<Vector<double> >&) const;
+                                    std::vector<Vector<double> >&) const override;
   protected:
     double     GAMMA;
   };
@@ -27,7 +27,7 @@ namespace mhd
   public:
     mhdBlast(Params &);
     
-    void point_value(const Point<dim> &, Vector<double>&) const;
+    void point_value(const Point<dim> &, Vector<double>&) const override;
   
   private:
     Point<dim> box[2];
@@ -40,7 +40,7 @@ namespace mhd
   public:
     harris(Params &);
     
-    void point_value(const Point<dim> &, Vector<double>&) const;
+    void point_value(const Point<dim> &, Vector<double>&) const override;
   
   private:                                  
     Point<dim> box[2];
@@ -53,7 +53,7 @@ namespace mhd
   public:
     TitovDemoulin(Params &);
     
-    void point_value(const Point<dim> &, Vector<double>&) const;
+    void point_value(const Point<dim> &, Vector<double>&) const override;
   
   private:
     Point<dim> box[2];
@@ -79,7 +79,7 @@ namespace mhd
   public:
     debug(Params &);
     
-    void point_value(const Point<dim> &, Vector<double>&) const;
+    void point_value(const Point<dim> &, Vector<double>&) const override;
   };
   
   

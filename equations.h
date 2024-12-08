@@ -59,6 +59,7 @@ namespace mhd
     void setDIRKStage(unsigned int);
     void setThetaMethod();
     
+    void dumpenOsc(const bool isMax, const bool isSteep);
     void set_state_vector_for_qp(std::vector<Vector<double> >**,
                         std::vector<std::vector<Tensor<1,dim> > >**,
                         const unsigned int);
@@ -68,6 +69,7 @@ namespace mhd
     void calucate_matrix_rhs(std::vector<FullMatrix<double>>&, Vector<double>&);
     void set_operators_full(std::vector<FullMatrix<double>>&);
     void set_operators_diag(std::vector<FullMatrix<double>>&);
+    void set_rhs_old(Vector<double>&);
     void set_rhs_theta(Vector<double>&);
     void set_rhs_DIRK(Vector<double>&);
     void set_rhs_DIRK_last(Vector<double>&);
@@ -84,6 +86,7 @@ namespace mhd
     void setMinh(double minh);
     void setDt(double);
     double getVmax();
+    double getEtaMax();
     double getEta(const Vector<double>& V) {return  (this->*setEta)(V);};
     void useNRLinearization(bool);
 //     void setEtaConst(LA::MPI::Vector &, LA::MPI::Vector &, LA::MPI::Vector &);
@@ -145,10 +148,10 @@ namespace mhd
       RightHandSide();
 
       virtual void vector_value(const Point<dim> &p,
-                                Vector<double>   &values) const;
+                                Vector<double>   &values) const override;
 
       virtual void vector_value_list(const std::vector<Point<dim> > &points,
-                                      std::vector<Vector<double> >   &value_list) const;
+                                      std::vector<Vector<double> >   &value_list) const override;
     };
     RightHandSide rhs;
     

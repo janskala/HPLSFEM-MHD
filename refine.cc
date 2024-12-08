@@ -12,6 +12,7 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "refine-simple");
 #endif
+    meshLev=meshMinLev;
     Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
     KellyErrorEstimator<dim>::estimate(dof_handler,
                                         QGauss<dim-1>(fe.degree+1),
@@ -45,17 +46,20 @@ namespace mhd
 #ifdef USE_TIMER
     TimerOutput::Scope t(computing_timer, "refine-shocks");
 #endif
+    meshLev=meshMinLev;
     typename Triangulation<dim>::active_cell_iterator
             cell = triangulation.begin_active(),
             endc = triangulation.end();
     for (unsigned int cell_no=0; cell!=endc; ++cell,++cell_no)
       if(cell->is_locally_owned()){
+        const unsigned int cLev=cell->level();
+        meshLev=std::max(meshLev,cLev);
         cell->clear_coarsen_flag();
         cell->clear_refine_flag();
-        if ((cell->level() < int(meshMaxLev)) &&
+        if ((cLev < meshMaxLev) &&
             (shockIndicator(cell_no) > meshRefGrad))
           cell->set_refine_flag();
-        else if ((cell->level() > int(meshMinLev)) &&
+        else if ((cLev > meshMinLev) &&
                 (shockIndicator(cell_no) < meshCoaGrad))
           cell->set_coarsen_flag();
       }
@@ -64,6 +68,7 @@ namespace mhd
     
     //cell = triangulation.begin_active(triangulation.n_levels()-1);
     mhdeq->setMinh(GridTools::minimal_cell_diameter(triangulation)/FEO);
+    meshLev=Utilities::MPI::max(meshLev,mpi_communicator);
   }
   
   template <int dim>
@@ -82,7 +87,6 @@ namespace mhd
     triangulation.execute_coarsening_and_refinement();  // Actual mesh refinement
     setup_system();  // resize vectors
     
-    LA::MPI::Vector distributed_solution(locally_owned_dofs, mpi_communicator);
     solution_transfer.interpolate(distributed_solution);
     
     solution=distributed_solution;
@@ -119,20 +123,20 @@ namespace mhd
             fe_values.get_function_values(solution, values);
             fe_values.get_function_gradients(solution, gadients);
 
-            for(unsigned int l=1; l<7; l++){ // Only B is used for max-grad
+            for(unsigned int l=1; l<Nv; l++){
                 max[l]=-9e99;
                 min[l]=9e99;
             } 
 
             for(unsigned int point=0; point<n_q_points; ++point)
-                for(unsigned int l=1; l<7; l++){
+                for(unsigned int l=1; l<Nv; l++){
                     min[l]=std::min(min[l],values[point][l]);
                     max[l]=std::max(max[l],values[point][l]);
                 }
 
             float grad=-9e99;
             for(unsigned int l=1; l<7; l++){
-                double hlp=std::log(1.0+std::fabs(max[l]-min[l]))*std::pow(1.0+cell->diameter(),4);
+                double hlp=std::log(1.0+std::fabs(max[l]-min[l]))*std::pow(1.0+cell->diameter(),1);
                 if (hlp>grad) grad=hlp; // maximum on cell
             }
 

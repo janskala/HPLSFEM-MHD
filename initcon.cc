@@ -497,11 +497,13 @@ namespace mhd
                   O1[k][k]=fe_values.shape_value_component(comp_i,point,k);
               // and curl of vector potential (stored at position of J)
               if (comp_i==8){
-                O1[5][ 8]=-fe_values.shape_grad_component(comp_i,point, 8)[2];
+                if (dim==3)
+                    O1[5][ 8]=-fe_values.shape_grad_component(comp_i,point, 8)[2];
                 O1[6][ 8]= fe_values.shape_grad_component(comp_i,point, 8)[1];
               }
               if (comp_i==9){
-                O1[4][ 9]= fe_values.shape_grad_component(comp_i,point, 9)[2];
+                if (dim==3)
+                  O1[4][ 9]= fe_values.shape_grad_component(comp_i,point, 9)[2];
                 O1[6][ 9]=-fe_values.shape_grad_component(comp_i,point, 9)[0];
               }
               if (comp_i==10){
@@ -517,11 +519,13 @@ namespace mhd
                     O2[k][k]=fe_values.shape_value_component(comp_j,point,k);
                 // and curl of vector potential (stored at position of J)
                 if (comp_j==8){
-                  O2[5][ 8]=-fe_values.shape_grad_component(comp_j,point, 8)[2];
+                  if (dim==3)
+                    O2[5][ 8]=-fe_values.shape_grad_component(comp_j,point, 8)[2];
                   O2[6][ 8]= fe_values.shape_grad_component(comp_j,point, 8)[1];
                 }
                 if (comp_j==9){
-                  O2[4][ 9]= fe_values.shape_grad_component(comp_j,point, 9)[2];
+                  if (dim==3)
+                    O2[4][ 9]= fe_values.shape_grad_component(comp_j,point, 9)[2];
                   O2[6][ 9]=-fe_values.shape_grad_component(comp_j,point, 9)[0];
                 }
                 if (comp_j==10){
